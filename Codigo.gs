@@ -41,17 +41,18 @@ function consultarRuc(ruc) {
   var h = hojaPadron_(), fila = buscarFila_(h, 0, ruc);
   var guardado = fila ? {
     razon: String(fila.v[1]), estado: String(fila.v[2]), condicion: String(fila.v[3]),
-    agenteRetencion: fila.v[4] === true, buenContribuyente: fila.v[5] === true,
-    fuente: String(fila.v[6]), consultado: Utilities.formatDate(new Date(fila.v[7]), 'America/Lima', 'yyyy-MM-dd')
+    agenteRetencion: String(fila.v[4]).toLowerCase() === 'true', buenContribuyente: String(fila.v[5]).toLowerCase() === 'true',
+    fuente: String(fila.v[6]), consultado: diaDe_(fila.v[7])
   } : null;
-  if (guardado && new Date() - new Date(fila.v[7]) < DIAS_CACHE_RUC * 86400000) return guardado;
+  if (guardado && new Date() - aFecha_(fila.v[7]) < DIAS_CACHE_RUC * 86400000) return guardado;
 
   var nuevo = consultarApis_(ruc);
   if (!nuevo) return guardado; // si ninguna API responde, se usa el dato antiguo (si existe)
 
-  var valores = [ruc, nuevo.razon, nuevo.estado, nuevo.condicion, nuevo.agenteRetencion, nuevo.buenContribuyente, nuevo.fuente, new Date()];
-  if (fila) h.getRange(fila.n, 1, 1, valores.length).setValues([valores]); else h.appendRow(valores);
-  nuevo.consultado = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+  var cuando = ahora_();
+  var valores = [ruc, nuevo.razon, nuevo.estado, nuevo.condicion, nuevo.agenteRetencion, nuevo.buenContribuyente, nuevo.fuente, cuando];
+  if (fila) h.getRange(fila.n, 1, 1, valores.length).setValues([valores]); else agregarFila_(h, valores);
+  nuevo.consultado = cuando.slice(0, 10);
   return nuevo;
 }
 
@@ -95,8 +96,26 @@ function probarConsultaRuc() {
 }
 
 // ---------- Hojas ----------
+// Las fechas se guardan como texto en hora de Lima ("2026-11-02 08:00"): así Sheets no las cambia de zona horaria
+function ahora_() {
+  return Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd HH:mm');
+}
+function aFecha_(v) { // celda (texto o fecha antigua) → Date
+  if (v instanceof Date) return v;
+  var s = String(v || '');
+  return s ? new Date(s.slice(0, 10) + 'T' + (s.slice(11, 16) || '00:00') + ':00-05:00') : null; // Perú: UTC-5 todo el año
+}
+function diaDe_(v) { // celda → "2026-11-02"
+  return v instanceof Date ? Utilities.formatDate(v, 'America/Lima', 'yyyy-MM-dd') : String(v || '').slice(0, 10);
+}
+function agregarFila_(h, valores) { // como appendRow, pero todo como texto
+  h.getRange(h.getLastRow() + 1, 1, 1, valores.length).setNumberFormat('@').setValues([valores]);
+}
+
 function hoja_(nombre, encabezados) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Las fechas guardadas en la hoja deben leerse en hora de Lima, igual que el script
+  if (ss.getSpreadsheetTimeZone() !== 'America/Lima') ss.setSpreadsheetTimeZone('America/Lima');
   var h = ss.getSheetByName(nombre);
   if (!h) {
     h = ss.insertSheet(nombre);
@@ -116,11 +135,10 @@ function hojaPresentadas_() {
 
 // Todas las marcas: { ruc: { "f621:2026-10": "2026-11-02", ... } }
 function todasLasMarcas_() {
-  var filas = hojaPresentadas_().getDataRange().getValues();
-  var tz = Session.getScriptTimeZone(), r = {};
+  var filas = hojaPresentadas_().getDataRange().getValues(), r = {};
   for (var i = 1; i < filas.length; i++) {
-    var ruc = String(filas[i][0]), f = filas[i][2];
-    (r[ruc] = r[ruc] || {})[String(filas[i][1])] = f instanceof Date ? Utilities.formatDate(f, tz, 'yyyy-MM-dd') : String(f);
+    var ruc = String(filas[i][0]);
+    (r[ruc] = r[ruc] || {})[String(filas[i][1])] = diaDe_(filas[i][2]);
   }
   return r;
 }
@@ -142,7 +160,7 @@ function marcarPresentada(ruc, clave, presentada) {
     for (var i = 1; i < filas.length; i++) {
       if (String(filas[i][0]) === ruc && String(filas[i][1]) === clave) { fila = i + 1; break; }
     }
-    if (presentada && fila === -1) h.appendRow([ruc, clave, new Date()]);
+    if (presentada && fila === -1) agregarFila_(h, [ruc, clave, ahora_()]);
     if (!presentada && fila !== -1) h.deleteRow(fila);
   } finally {
     lock.releaseLock();
@@ -202,13 +220,13 @@ function registrarAviso(ruc, correo, perfil, autoriza) {
       h.getRange(i + 1, COL.perfil + 1).setValue(p);
       if (filas[i][COL.estado] === 'activo') return { estado: 'activo' };
       // Pendiente o dado de baja: se vuelve a pedir confirmación (sin reenviar más de una vez cada 10 minutos)
-      var hace = new Date() - new Date(filas[i][COL.registrado]);
-      h.getRange(i + 1, COL.estado + 1, 1, 2).setValues([['pendiente', new Date()]]);
+      var hace = new Date() - aFecha_(filas[i][COL.registrado]);
+      h.getRange(i + 1, COL.estado + 1, 1, 2).setNumberFormat('@').setValues([['pendiente', ahora_()]]);
       if (!(hace < 10 * 60 * 1000)) correoConfirmacion_(ruc, correo, String(filas[i][COL.token]));
       return { estado: 'pendiente' };
     }
     var token = Utilities.getUuid();
-    h.appendRow([ruc, correo, p, token, 'pendiente', new Date(), '']);
+    agregarFila_(h, [ruc, correo, p, token, 'pendiente', ahora_(), '']);
     correoConfirmacion_(ruc, correo, token);
     return { estado: 'pendiente' };
   } finally {
@@ -276,7 +294,7 @@ function revisarAvisos_(hoy, enviar) {
     if (!enviar) return;
     if (MailApp.getRemainingDailyQuota() < 1) { Logger.log('Se acabó el cupo diario de correos.'); return; }
     correoAviso_(ruc, String(f[COL.correo]), token, items);
-    items.forEach(function (it) { hEnv.appendRow([token, it.clave, new Date()]); });
+    items.forEach(function (it) { agregarFila_(hEnv, [token, it.clave, ahora_()]); });
   });
   Logger.log((enviar ? 'Enviados' : 'Se enviarían') + ' (' + iso(hoy) + ', vence ' + manana + '):\n' + (resumen.join('\n') || 'ninguno'));
   return resumen;
@@ -370,7 +388,7 @@ function ejecutarAccion(accion, token, clave) {
 
   if (accion === 'confirmar' || accion === 'baja') {
     h.getRange(fila.n, COL.estado + 1).setValue(accion === 'confirmar' ? 'activo' : 'baja');
-    if (accion === 'confirmar') h.getRange(fila.n, COL.confirmado + 1).setValue(new Date());
+    if (accion === 'confirmar') h.getRange(fila.n, COL.confirmado + 1).setNumberFormat('@').setValue(ahora_());
     return accion === 'confirmar'
       ? { titulo: 'Avisos activados', texto: 'Te escribiremos un día hábil antes de cada vencimiento que no hayas marcado como presentado.', enlace: verSemaforo }
       : { titulo: 'Ya no recibirás avisos', texto: 'Si cambias de opinión, vuelve a activarlos desde tu semáforo.', enlace: verSemaforo };
