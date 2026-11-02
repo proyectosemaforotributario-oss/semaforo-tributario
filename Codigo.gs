@@ -205,9 +205,10 @@ function hojaEnviados_() {
   return hoja_('Enviados', ['Token', 'Obligación:periodo', 'Enviado el']);
 }
 
-// Enlaces de los correos: a la página en GitHub Pages (URL_SITIO) o, si aún no existe, a este script
+// Enlaces de los correos: a la página en GitHub Pages (se puede cambiar con la propiedad URL_SITIO)
+var URL_SITIO = 'https://proyectosemaforotributario-oss.github.io/semaforo-tributario/';
 function urlApp_(params) {
-  var sitio = PropertiesService.getScriptProperties().getProperty('URL_SITIO');
+  var sitio = PropertiesService.getScriptProperties().getProperty('URL_SITIO') || URL_SITIO;
   var base = sitio ? sitio.replace(/\/?$/, '/') + (params.accion ? 'accion.html' : '') : ScriptApp.getService().getUrl();
   return base + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
 }
