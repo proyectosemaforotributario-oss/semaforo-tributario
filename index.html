@@ -469,7 +469,11 @@ const datos = {
     local.guardar('st:marcas:' + ruc, m);
     return Promise.resolve(m);
   },
-  ruc: ruc => enAppsScript ? llamar('consultarRuc', ruc) : Promise.resolve(null),
+  // Vista local: ?padron=demo simula una respuesta del padrón para revisar el diseño
+  ruc: ruc => enAppsScript ? llamar('consultarRuc', ruc)
+    : Promise.resolve(location.search.includes('padron=demo')
+      ? { razon: 'COMERCIAL MOQUEGUA S.A.C.', estado: 'ACTIVO', condicion: 'NO HABIDO', agenteRetencion: true, buenContribuyente: false, fuente: 'Decolecta', consultado: iso(new Date()) }
+      : null),
   // En la vista local no hay correo: se simula el registro
   avisar: (ruc, correo, perfil) => enAppsScript ? llamar('registrarAviso', ruc, correo, perfil, true) : Promise.resolve({ estado: 'pendiente' })
 };
@@ -524,11 +528,20 @@ async function consultar(e) {
   try {
     const d = await datos.ruc(ruc);
     actual.datosRuc = d;
-    actual.fuente = d ? 'Nombre, estado y condición según el padrón de la SUNAT.' : 'No pudimos consultar el padrón de la SUNAT. Verifica tu RUC en la Consulta RUC de la SUNAT.';
+    actual.fuente = d
+      ? `Datos del padrón de la SUNAT, consultados el ${corta(deIso(d.consultado))} mediante ${d.fuente}.`
+      : 'No pudimos consultar el padrón de la SUNAT. Verifica tu RUC en la Consulta RUC de la SUNAT.';
   } catch (x) {
     actual.fuente = 'No pudimos consultar el padrón de la SUNAT. Verifica tu RUC en la Consulta RUC de la SUNAT.';
   }
-  if (actual.ruc === ruc) pintarFicha();
+  if (actual.ruc !== ruc) return;
+  const d = actual.datosRuc;
+  // Si el padrón dice que es agente de retención, se marca la casilla (la persona puede desmarcarla)
+  if (d && d.agenteRetencion && !$('retencion').checked && $('regimen').value !== 'NRUS') {
+    $('retencion').checked = true;
+    actual.notaPadron = 'Marcamos «Soy agente de retención del IGV» porque así figura en el padrón.';
+    pintar();
+  } else pintarFicha();
 }
 
 function mostrarError(t) { $('error').textContent = t; $('error').hidden = false; }
@@ -636,7 +649,10 @@ function pintarFicha() {
   const tag = (v, bueno) => v ? `<span class="tag ${v === bueno ? 'ok' : 'mal'}">${escapar(v)}</span>` : '';
   const est = d ? tag(d.estado, 'ACTIVO') + tag(d.condicion, 'HABIDO') : '';
   $('fEstados').innerHTML = est || '<span class="tag nd">Estado sin verificar</span>';
-  $('fFuente').innerHTML = escapar(actual.fuente) + (d ? '' : ' <a href="https://e-consultaruc.sunat.gob.pe/cl-ti-itmrconsruc/FrameCriterioBusquedaWeb.jsp" target="_blank" rel="noopener">Abrir Consulta RUC</a>');
+  const notas = [actual.fuente, actual.notaPadron || '',
+    d && d.buenContribuyente ? 'Figuras como buen contribuyente: tu cronograma vence unos días después; este semáforo usa el cronograma general.' : '']
+    .filter(Boolean).map(escapar).join(' ');
+  $('fFuente').innerHTML = notas + (d ? '' : ' <a href="https://e-consultaruc.sunat.gob.pe/cl-ti-itmrconsruc/FrameCriterioBusquedaWeb.jsp" target="_blank" rel="noopener">Abrir Consulta RUC</a>');
 
   const problemas = [];
   if (d && d.estado && d.estado !== 'ACTIVO') problemas.push(`tu RUC figura en estado <b>${escapar(d.estado)}</b>`);

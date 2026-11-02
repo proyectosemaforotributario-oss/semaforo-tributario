@@ -15,24 +15,83 @@ function rucValido_(ruc) {
   return typeof ruc === 'string' && errorRuc(ruc) === '';
 }
 
-// Consulta el padrón de la SUNAT mediante la API de terceros (el token no se expone al navegador)
+// ---------- Padrón de la SUNAT: APIs de terceros en cascada, con caché en la hoja "Padron" ----------
+// Cada API necesita su token en Propiedades del script (el token nunca llega al navegador).
+// Se prueban en orden; si una no tiene token, falla o se quedó sin cupo, se pasa a la siguiente.
+// Para sumar otra API: agregar un objeto aquí con su URL y cómo leer su respuesta.
+var APIS_RUC = [
+  {
+    nombre: 'Decolecta', propiedad: 'DECOLECTA_TOKEN', // plan gratis: 100 consultas al mes
+    url: function (ruc) { return 'https://api.decolecta.com/v1/sunat/ruc?numero=' + ruc; },
+    leer: function (d) {
+      return { razon: d.razon_social, estado: d.estado, condicion: d.condicion,
+               agenteRetencion: d.es_agente_retencion === true, buenContribuyente: d.es_buen_contribuyente === true };
+    }
+  }
+];
+var DIAS_CACHE_RUC = 15; // los datos del padrón casi no cambian
+
+function hojaPadron_() {
+  return hoja_('Padron', ['RUC', 'Razón social', 'Estado', 'Condición', 'Agente de retención', 'Buen contribuyente', 'Fuente', 'Consultado el']);
+}
+
+// Devuelve { razon, estado, condicion, agenteRetencion, buenContribuyente, fuente, consultado } o null
 function consultarRuc(ruc) {
   if (!rucValido_(ruc)) throw new Error('RUC inválido');
-  var token = PropertiesService.getScriptProperties().getProperty('DECOLECTA_TOKEN');
-  if (!token) return null;
+  var h = hojaPadron_(), fila = buscarFila_(h, 0, ruc);
+  var guardado = fila ? {
+    razon: String(fila.v[1]), estado: String(fila.v[2]), condicion: String(fila.v[3]),
+    agenteRetencion: fila.v[4] === true, buenContribuyente: fila.v[5] === true,
+    fuente: String(fila.v[6]), consultado: Utilities.formatDate(new Date(fila.v[7]), 'America/Lima', 'yyyy-MM-dd')
+  } : null;
+  if (guardado && new Date() - new Date(fila.v[7]) < DIAS_CACHE_RUC * 86400000) return guardado;
 
-  var resp = UrlFetchApp.fetch('https://api.decolecta.com/v1/sunat/ruc?numero=' + ruc, {
-    headers: { Authorization: 'Bearer ' + token },
-    muteHttpExceptions: true
-  });
-  if (resp.getResponseCode() !== 200) throw new Error('la API respondió ' + resp.getResponseCode());
+  var nuevo = consultarApis_(ruc);
+  if (!nuevo) return guardado; // si ninguna API responde, se usa el dato antiguo (si existe)
 
-  var d = JSON.parse(resp.getContentText());
-  return {
-    razon: d.razon_social || d.razonSocial || d.nombre || '',
-    estado: String(d.estado || '').toUpperCase(),
-    condicion: String(d.condicion || '').toUpperCase()
-  };
+  var valores = [ruc, nuevo.razon, nuevo.estado, nuevo.condicion, nuevo.agenteRetencion, nuevo.buenContribuyente, nuevo.fuente, new Date()];
+  if (fila) h.getRange(fila.n, 1, 1, valores.length).setValues([valores]); else h.appendRow(valores);
+  nuevo.consultado = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+  return nuevo;
+}
+
+function consultarApis_(ruc) {
+  var props = PropertiesService.getScriptProperties();
+  for (var i = 0; i < APIS_RUC.length; i++) {
+    var api = APIS_RUC[i], token = props.getProperty(api.propiedad);
+    if (!token) continue;
+    try {
+      var resp = UrlFetchApp.fetch(api.url(ruc), { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+      contarUso_(api.nombre);
+      if (resp.getResponseCode() !== 200) {
+        Logger.log(api.nombre + ' respondió ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 200));
+        continue;
+      }
+      var d = api.leer(JSON.parse(resp.getContentText()));
+      if (!d.razon) continue;
+      d.razon = String(d.razon); d.estado = String(d.estado || '').toUpperCase(); d.condicion = String(d.condicion || '').toUpperCase();
+      d.fuente = api.nombre;
+      return d;
+    } catch (e) {
+      Logger.log(api.nombre + ' falló: ' + e);
+    }
+  }
+  return null;
+}
+
+// Cuenta las consultas de cada API por mes (Propiedades del script: USO_Decolecta_2026-11, ...)
+function contarUso_(nombre) {
+  var props = PropertiesService.getScriptProperties();
+  var clave = 'USO_' + nombre + '_' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  props.setProperty(clave, String(Number(props.getProperty(clave) || 0) + 1));
+}
+
+// Ejecutar desde el editor para comprobar la conexión con las APIs (usa 1 consulta de cupo)
+function probarConsultaRuc() {
+  var ruc = '20100070970'; // cámbialo por un RUC real de prueba
+  var fila = buscarFila_(hojaPadron_(), 0, ruc);
+  if (fila) hojaPadron_().deleteRow(fila.n); // fuerza la consulta a la API
+  Logger.log(JSON.stringify(consultarRuc(ruc), null, 2));
 }
 
 // ---------- Hojas ----------
