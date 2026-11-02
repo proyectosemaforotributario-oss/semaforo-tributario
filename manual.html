@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual del Semáforo Tributario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --papel: #EDF0EE; --hoja: #FFFFFF; --tinta: #16202A; --tinta-2: #56626C; --linea: #D2D8D5;
+    --sello: #2A3E9E; --rojo: #D1342B; --ambar: #EAA000; --verde: #1D8C50; --gris: #8A939B;
+    --rojo-texto: #B02A22; --ambar-texto: #8A5D00; --verde-texto: #17703F; --carcasa: #1E252C;
+    color-scheme: light;
+  }
+  @media screen and (prefers-color-scheme: dark) {
+    :root { --papel: #12171C; --hoja: #1A2128; --tinta: #E9EEF1; --tinta-2: #9AA6AF; --linea: #2E3841; --sello: #93A5FF;
+            --rojo-texto: #FF8A80; --ambar-texto: #F4B93A; --verde-texto: #5DD08F; --carcasa: #0B0F13; color-scheme: dark; }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: var(--papel); color: var(--tinta); font-family: "Atkinson Hyperlegible", system-ui, sans-serif; font-size: 1.0625rem; line-height: 1.6; }
+  .contenedor { max-width: 760px; margin: 0 auto; padding: 0 16px 56px; }
+  a { color: var(--sello); }
+  :focus-visible { outline: 3px solid var(--sello); outline-offset: 2px; }
+
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 0; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; color: inherit; text-decoration: none; }
+  .marca-luz { display: inline-flex; flex-direction: column; gap: 2px; background: var(--carcasa); padding: 3px; border-radius: 6px; }
+  .marca-luz i { width: 6px; height: 6px; border-radius: 50%; }
+  .marca-luz i:nth-child(1) { background: var(--rojo); } .marca-luz i:nth-child(2) { background: var(--ambar); } .marca-luz i:nth-child(3) { background: var(--verde); }
+  .boton { display: inline-block; padding: 10px 16px; border-radius: 10px; background: var(--tinta); color: var(--papel); font-weight: 700; text-decoration: none; }
+
+  h1 { font-size: clamp(2.2rem, 6vw, 3.2rem); line-height: 1.05; letter-spacing: -.015em; margin: 24px 0 12px; }
+  .bajada { color: var(--tinta-2); font-size: 1.15rem; margin: 0 0 8px; max-width: 52ch; }
+  .meta { color: var(--tinta-2); font-size: .95rem; margin: 0 0 32px; }
+
+  h2 { font-size: 1.5rem; line-height: 1.2; margin: 48px 0 12px; padding-top: 20px; border-top: 2px solid var(--tinta); }
+  h3 { font-size: 1.15rem; margin: 24px 0 6px; }
+  p, li { max-width: 66ch; }
+  ul, ol { padding-left: 1.3em; }
+  li { margin: 4px 0; }
+
+  .paso { display: grid; grid-template-columns: 44px 1fr; gap: 14px; margin-top: 40px; }
+  .paso-num { width: 44px; height: 44px; border-radius: 50%; background: var(--tinta); color: var(--papel); display: grid; place-items: center; font-weight: 700; font-size: 1.2rem; }
+  .paso h2 { border: 0; margin: 4px 0 8px; padding: 0; }
+
+  figure { margin: 18px 0 8px; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--linea); border-radius: 10px; }
+  figcaption { color: var(--tinta-2); font-size: .9rem; margin-top: 6px; }
+
+  .colores { list-style: none; padding: 0; display: grid; gap: 8px; }
+  .colores li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+  .colores i { width: 16px; height: 16px; border-radius: 50%; margin-top: 5px; }
+
+  .sello { display: inline-block; transform: rotate(-3deg); padding: 0 6px; line-height: 1.35; color: var(--sello); border: 2px solid var(--sello);
+           border-radius: 4px; font-weight: 700; font-size: .8em; letter-spacing: .12em; margin: 0 3px; vertical-align: .05em; }
+  .nota { background: var(--hoja); border-left: 4px solid var(--sello); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .nota.alerta { border-left-color: var(--rojo); }
+
+  dl.faq dt { font-weight: 700; margin-top: 18px; }
+  dl.faq dd { margin: 4px 0 0; color: var(--tinta); max-width: 66ch; }
+
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--linea); color: var(--tinta-2); font-size: .9rem; }
+
+  /* Impresión / PDF en A4 */
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  @media print {
+    body { background: #fff; font-size: 10.5pt; line-height: 1.5; }
+    .contenedor { max-width: none; padding: 0; }
+    .barra .boton { display: none; }
+    h1 { font-size: 28pt; margin-top: 8mm; }
+    h2 { font-size: 15pt; margin-top: 8mm; break-after: avoid; }
+    .paso { margin-top: 8mm; }
+    .paso h2 { break-after: avoid; }
+    figure { break-inside: avoid; }
+    figure img { max-height: 105mm; width: auto; max-width: 100%; }
+    .nota, dl.faq dt, dl.faq dd { break-inside: avoid; }
+    a { color: var(--tinta); text-decoration: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="contenedor">
+  <header class="barra">
+    <a class="marca" href="./"><span class="marca-luz" aria-hidden="true"><i></i><i></i><i></i></span>Semáforo Tributario</a>
+    <a class="boton" href="./">Abrir el semáforo</a>
+  </header>
+
+  <main>
+    <h1>Manual de uso</h1>
+    <p class="bajada">Cómo saber cuántos días te quedan para cada declaración ante la SUNAT y recibir avisos por correo antes de que venza el plazo.</p>
+    <p class="meta">Para dueños de MYPE y contadores de Moquegua. Prototipo gratuito, versión 2026.</p>
+
+    <p><b>Dirección de la página:</b> <a href="https://proyectosemaforotributario-oss.github.io/semaforo-tributario/">proyectosemaforotributario-oss.github.io/semaforo-tributario</a><br>
+    También puedes entrar escaneando el código QR del afiche con la cámara de tu celular. No necesitas instalar nada ni crear una cuenta, y nunca te pediremos tu clave SOL.</p>
+
+    <section class="paso" aria-labelledby="p1">
+      <span class="paso-num" aria-hidden="true">1</span>
+      <div>
+        <h2 id="p1">Escribe tu RUC y marca tu negocio</h2>
+        <p>Escribe los 11 dígitos de tu RUC y pulsa <b>Ver mi semáforo</b>. Si te equivocas en un dígito, la página te lo dice.</p>
+        <p>En <b>Tu negocio</b> elige tu régimen y marca solo lo que te corresponde. Así no verás obligaciones que no tienes:</p>
+        <ul>
+          <li><b>Tengo trabajadores en planilla:</b> agrega la PLAME.</li>
+          <li><b>Llevo registros electrónicos:</b> agrega los registros de ventas y de compras (SIRE o PLE).</li>
+          <li><b>Agente de retención o de percepción del IGV:</b> agrega esas declaraciones.</li>
+          <li><b>Pago el ITAN:</b> agrega sus cuotas, de abril a diciembre.</li>
+        </ul>
+        <p>La página recuerda estas casillas para tu RUC en ese celular o computadora.</p>
+      </div>
+    </section>
+
+    <section class="paso" aria-labelledby="p2">
+      <span class="paso-num" aria-hidden="true">2</span>
+      <div>
+        <h2 id="p2">Lee tu semáforo</h2>
+        <figure>
+          <img src="material/manual/paso1-semaforo.png" alt="Pantalla con el RUC escrito, las casillas de Tu negocio y un semáforo en amarillo que indica 5 días para presentar el IGV" width="1050" height="800">
+          <figcaption>Ejemplo con un RUC ficticio: faltan 5 días para el IGV, por eso el semáforo está en amarillo.</figcaption>
+        </figure>
+        <p>El <b>semáforo grande</b> te muestra cuántos días faltan para el vencimiento más cercano que todavía no marcaste como presentado.</p>
+        <ul class="colores">
+          <li><i style="background:var(--verde)"></i><span><b>Verde:</b> faltan más de 7 días.</span></li>
+          <li><i style="background:var(--ambar)"></i><span><b>Amarillo:</b> faltan de 3 a 7 días. Prepara tu declaración.</span></li>
+          <li><i style="background:var(--rojo)"></i><span><b>Rojo:</b> faltan 2 días o menos, o ya venció y no lo marcaste.</span></li>
+          <li><i style="background:var(--gris)"></i><span><b>Gris:</b> la SUNAT todavía no publica la fecha (por ejemplo, la declaración anual del próximo año).</span></li>
+        </ul>
+        <p>Debajo aparecen el nombre de tu empresa y el estado de tu RUC según el padrón de la SUNAT. Si tu RUC figura <b>de baja</b> o tu domicilio como <b>no habido</b>, verás un aviso en rojo: consulta a tu contador.</p>
+        <p>Las fechas se calculan en días hábiles, igual que el cronograma de la SUNAT. Si una fecha dice <i>provisional</i>, es de un año cuyo cronograma la SUNAT aún no publica.</p>
+      </div>
+    </section>
+
+    <section class="paso" aria-labelledby="p3">
+      <span class="paso-num" aria-hidden="true">3</span>
+      <div>
+        <h2 id="p3">Marca lo que ya presentaste</h2>
+        <figure>
+          <img src="material/manual/paso2-obligaciones.png" alt="Lista de obligaciones: IGV y PLAME en amarillo con el botón Ya la presenté; Retenciones del IGV y Declaración anual con el sello PRESENTADA" width="1050" height="750">
+          <figcaption>Cada obligación tiene su propio semáforo. Las ya presentadas llevan el sello azul.</figcaption>
+        </figure>
+        <p>Cuando declares, pulsa <b>Ya la presenté</b> en esa obligación. Aparecerá el sello <span class="sello">PRESENTADA</span> con la fecha, y esa obligación deja de contar para el semáforo grande y para los avisos.</p>
+        <p>Si te equivocaste, pulsa <b>Deshacer</b>. La próxima vez que entres con tu RUC verás lo que marcaste, desde cualquier celular o computadora.</p>
+        <p class="nota">La página no se conecta con tu Clave SOL, así que <b>no comprueba con la SUNAT</b> si declaraste: la marca es tu propia confirmación. Revisa tu constancia de presentación en SUNAT Operaciones en Línea.</p>
+      </div>
+    </section>
+
+    <section class="paso" aria-labelledby="p4">
+      <span class="paso-num" aria-hidden="true">4</span>
+      <div>
+        <h2 id="p4">Activa los avisos por correo</h2>
+        <figure>
+          <img src="material/manual/paso3-avisos.png" alt="Caja Recibe un aviso por correo con el campo de correo, el botón Activar avisos y la casilla de autorización" width="1050" height="365">
+          <figcaption>Al final de la página, escribe tu correo y autoriza los avisos.</figcaption>
+        </figure>
+        <ol>
+          <li>Escribe tu correo, marca la casilla de autorización y pulsa <b>Activar avisos</b>.</li>
+          <li>Revisa tu bandeja (y la carpeta de spam): te llega un correo <b>«Confirma tus avisos»</b>.</li>
+          <li>Pulsa <b>Confirmar avisos</b> y, en la página que se abre, otra vez el botón. Debe decir <b>«Avisos activados»</b>.</li>
+        </ol>
+        <h3>Cuándo te escribimos</h3>
+        <ul>
+          <li>Una vez, cuando una obligación pasa a <b>amarillo</b> (faltan 7 días o menos).</li>
+          <li>Cada día, a las 8 a. m., mientras esté en <b>rojo</b>, hasta que la marques como presentada (como máximo 5 días después de vencer).</li>
+        </ul>
+        <p>Cada correo trae botones para marcar la obligación como presentada, ver tu semáforo o dejar de recibir avisos.</p>
+        <p class="nota">Si cambias las casillas de <b>Tu negocio</b> (por ejemplo, contratas trabajadores), vuelve a pulsar <b>Activar avisos</b> con el mismo correo para actualizar lo que te avisamos.</p>
+      </div>
+    </section>
+
+    <h2>Si eres contador</h2>
+    <p>Puedes usar el semáforo para cada cliente: escribe su RUC, marca sus casillas y activa los avisos con <b>tu</b> correo. Recibirás un aviso por cada RUC. Repite el paso 4 para cada cliente.</p>
+
+    <h2>Preguntas frecuentes</h2>
+    <dl class="faq">
+      <dt>¿Cuesta algo?</dt>
+      <dd>No. Es un prototipo académico gratuito.</dd>
+      <dt>¿De dónde salen las fechas?</dt>
+      <dd>Del cronograma de obligaciones mensuales de la SUNAT (Resolución de Superintendencia N.° 000281-2022/SUNAT): vencen entre el 11.° y el 16.° día hábil del mes siguiente, según el último dígito del RUC. Los registros electrónicos vencen un día hábil antes. La declaración anual usa las fechas que la SUNAT publica cada año.</dd>
+      <dt>¿Qué datos guardan y para qué?</dt>
+      <dd>Tu RUC, lo que marcas como presentado y, solo si activas los avisos, tu correo y las casillas de tu negocio. Se usan únicamente para mostrarte tu semáforo y enviarte los avisos (Ley N.° 29733). Puedes darte de baja desde cualquier correo.</dd>
+      <dt>¿Sirve para buenos contribuyentes o entidades del sector público?</dt>
+      <dd>No. Este prototipo usa el cronograma general. Si figuras como buen contribuyente, la página te lo indica.</dd>
+      <dt>No me llega el correo de confirmación.</dt>
+      <dd>Revisa la carpeta de spam o de promociones. Si no aparece en unos minutos, vuelve a pulsar Activar avisos.</dd>
+      <dt>La página no abre.</dt>
+      <dd>Comprueba tu conexión a internet y escribe la dirección completa. Si sigue sin abrir, prueba en otro navegador o en una ventana privada.</dd>
+    </dl>
+
+    <p class="nota alerta">Declarar fuera de plazo puede costar una multa de hasta 1 UIT (S/ 5 500 en 2026), además de intereses. El semáforo te ayuda a recordarlo, pero <b>no reemplaza la asesoría de tu contador</b>. Confirma siempre las fechas en sunat.gob.pe.</p>
+  </main>
+
+  <footer>Prototipo académico del programa de Contabilidad, IESP «José Carlos Mariátegui», Samegua, Moquegua, 2026.</footer>
+</div>
+</body>
+</html>
