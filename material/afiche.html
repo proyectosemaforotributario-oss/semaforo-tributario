@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Afiche Semáforo Tributario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  /* Afiche A4 para imprimir (210 × 297 mm) */
+  @page { size: A4; margin: 0; }
+  :root {
+    --tinta: #16202A; --tinta-2: #4E5A64; --linea: #D2D8D5; --papel: #EDF0EE;
+    --sello: #2A3E9E; --rojo: #D1342B; --ambar: #EAA000; --verde: #1D8C50;
+    --carcasa: #1E252C; --lente: #3A444E;
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; background: #fff; }
+  body { font-family: "Atkinson Hyperlegible", system-ui, sans-serif; color: var(--tinta); }
+  .hoja { width: 210mm; height: 297mm; padding: 14mm 15mm 12mm; display: flex; flex-direction: column; overflow: hidden; }
+
+  .marca { display: flex; justify-content: space-between; align-items: center; font-size: 11pt; }
+  .marca b { display: flex; align-items: center; gap: 2.5mm; font-size: 13pt; }
+  .marca-luz { display: inline-flex; flex-direction: column; gap: .7mm; background: var(--carcasa); padding: 1mm; border-radius: 2mm; }
+  .marca-luz i { width: 2mm; height: 2mm; border-radius: 50%; }
+  .marca-luz i:nth-child(1) { background: var(--rojo); } .marca-luz i:nth-child(2) { background: var(--ambar); } .marca-luz i:nth-child(3) { background: var(--verde); }
+  .marca span { color: var(--tinta-2); }
+
+  /* Parte superior: el semáforo y la pregunta */
+  .hero { display: grid; grid-template-columns: 42mm 1fr; gap: 11mm; align-items: center; margin-top: 9mm; }
+  .carcasa { background: var(--carcasa); border-radius: 21mm; padding: 5mm; display: flex; flex-direction: column; gap: 4mm; width: 42mm; }
+  .lente { width: 32mm; height: 32mm; border-radius: 50%; background: var(--lente); box-shadow: inset 0 2mm 4mm rgb(0 0 0 / .45); }
+  .l-r { background: radial-gradient(circle at 38% 32%, #FF9A90, var(--rojo) 55%, #8C1D17); }
+  .l-a { background: radial-gradient(circle at 38% 32%, #FFE08A, var(--ambar) 55%, #9A6500); }
+  .l-v { background: radial-gradient(circle at 38% 32%, #8FE6B4, var(--verde) 55%, #0E5A31); }
+  .poste { width: 7mm; height: 8mm; background: var(--carcasa); margin: 0 auto; }
+
+  h1 { font-size: 42pt; line-height: 1; letter-spacing: -.02em; margin: 0 0 6mm; }
+  .bajada { font-size: 16pt; line-height: 1.35; color: var(--tinta-2); margin: 0; max-width: 34ch; }
+  .colores { list-style: none; padding: 0; margin: 7mm 0 0; display: grid; gap: 2.2mm; font-size: 13pt; }
+  .colores li { display: flex; align-items: center; gap: 3mm; }
+  .colores i { width: 5mm; height: 5mm; border-radius: 50%; flex: none; }
+
+  /* Parte inferior: QR y pasos */
+  .accion { position: relative; margin-top: auto; display: grid; grid-template-columns: 66mm 1fr; gap: 10mm; align-items: center;
+            border-top: 1mm solid var(--tinta); padding-top: 9mm; }
+  .qr svg { width: 66mm; height: 66mm; display: block; }
+  .sello {
+    position: absolute; right: 2mm; top: -6.5mm; transform: rotate(-6deg);
+    color: var(--sello); border: .9mm solid var(--sello); outline: .4mm solid var(--sello); outline-offset: .7mm;
+    border-radius: 1.5mm; padding: 1.2mm 3.5mm .9mm; background: #fff;
+    font-weight: 700; font-size: 15pt; letter-spacing: .14em; line-height: 1;
+  }
+  .pasos { list-style: none; counter-reset: paso; padding: 0; margin: 0; display: grid; gap: 6mm; }
+  .pasos li { counter-increment: paso; display: grid; grid-template-columns: 11mm 1fr; gap: 3.5mm; align-items: start; font-size: 15pt; line-height: 1.3; }
+  .pasos li::before {
+    content: counter(paso); width: 11mm; height: 11mm; border-radius: 50%; background: var(--tinta); color: #fff;
+    display: grid; place-items: center; font-weight: 700; font-size: 14pt;
+  }
+  .pasos b { display: block; font-size: 17pt; }
+  .pasos span { color: var(--tinta-2); }
+
+  .multa { margin: 7mm 0 0; padding: 4mm 5mm; background: var(--papel); border-left: 1.5mm solid var(--rojo); font-size: 13pt; line-height: 1.35; }
+  .pie { margin-top: 6mm; font-size: 9.5pt; color: var(--tinta-2); line-height: 1.4; }
+  .pie p { margin: 0; }
+  .pie .url { color: var(--tinta); font-weight: 700; font-size: 11pt; white-space: nowrap; }
+  .pie .creditos { margin-top: 2.5mm; }
+
+  @media screen { body { background: #9AA3A8; padding: 10mm 0; } .hoja { margin: 0 auto; background: #fff; box-shadow: 0 2mm 8mm rgb(0 0 0 / .25); } }
+</style>
+</head>
+<body>
+<main class="hoja">
+  <div class="marca">
+    <b><span class="marca-luz" aria-hidden="true"><i></i><i></i><i></i></span>Semáforo Tributario</b>
+    <span>Para las MYPE de Moquegua</span>
+  </div>
+
+  <section class="hero">
+    <div aria-hidden="true">
+      <div class="carcasa"><span class="lente l-r"></span><span class="lente l-a"></span><span class="lente l-v"></span></div>
+      <div class="poste"></div>
+    </div>
+    <div>
+      <h1>¿Cuánto te falta para declarar?</h1>
+      <p class="bajada">Con tu RUC te mostramos cada vencimiento del cronograma de la SUNAT y te avisamos por correo antes de que se pase la fecha.</p>
+      <ul class="colores">
+        <li><i style="background:var(--verde)"></i>Verde: más de 7 días</li>
+        <li><i style="background:var(--ambar)"></i>Amarillo: de 3 a 7 días</li>
+        <li><i style="background:var(--rojo)"></i>Rojo: 2 días o menos</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="accion">
+    <span class="sello">GRATIS</span>
+    <div class="qr" id="qr" role="img" aria-label="Código QR de la página del Semáforo Tributario"></div>
+    <ol class="pasos">
+      <li><div><b>Escanea el código</b><span>con la cámara de tu celular.</span></div></li>
+      <li><div><b>Escribe tu RUC</b><span>No necesitas tu clave SOL.</span></div></li>
+      <li><div><b>Activa los avisos</b><span>Te escribimos cuando tu semáforo pase a amarillo y a rojo.</span></div></li>
+    </ol>
+  </section>
+
+  <p class="multa">Declarar fuera de plazo puede costar una multa de hasta <b>1 UIT (S/ 5 500 en 2026)</b>, además de intereses.</p>
+
+  <div class="pie">
+    <p>También puedes escribir la dirección: <span class="url" id="url"></span></p>
+    <p class="creditos">Proyecto de Contabilidad, IESP «José Carlos Mariátegui», Moquegua, 2026. No reemplaza la asesoría de tu contador.</p>
+  </div>
+</main>
+<script>
+  const URL_WEB = 'https://proyectosemaforotributario-oss.github.io/semaforo-tributario/';
+  document.getElementById('url').textContent = URL_WEB.replace('https://', '');
+  const qr = qrcode(0, 'M');
+  qr.addData(URL_WEB);
+  qr.make();
+  document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+</script>
+</body>
+</html>
