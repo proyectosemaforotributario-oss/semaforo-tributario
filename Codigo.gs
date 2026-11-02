@@ -261,9 +261,9 @@ function registrarAviso(ruc, correo, perfil, autoriza) {
 }
 
 // ---------- Correos ----------
-function plantillaCorreo_(titulo, cuerpoHtml, pie) {
+function plantillaCorreo_(titulo, cuerpoHtml, pie, color) {
   return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#16202A;max-width:560px">'
-    + '<div style="height:8px;background:#D1342B;border-radius:4px;margin-bottom:18px"></div>'
+    + '<div style="height:8px;background:' + (color || '#2A3E9E') + ';border-radius:4px;margin-bottom:18px"></div>'
     + '<h1 style="font-size:21px;line-height:1.25;margin:0 0 14px">' + titulo + '</h1>'
     + cuerpoHtml
     + '<p style="margin:22px 0 0;font-size:13px">' + pie + '</p>'
@@ -277,7 +277,7 @@ function boton_(texto, url) {
 
 function correoConfirmacion_(ruc, correo, token) {
   var cuerpo = '<p>Hola:</p><p>Pediste recibir avisos del Semáforo Tributario para el RUC <b>' + ruc + '</b>. '
-    + 'Te escribiremos un día hábil antes de cada vencimiento que no hayas marcado como presentado.</p>'
+    + 'Te escribiremos cuando una obligación pase a amarillo (faltan 7 días) y cada día que esté en rojo, hasta que la marques como presentada.</p>'
     + '<p>' + boton_('Confirmar avisos', urlApp_({ accion: 'confirmar', t: token })) + '</p>'
     + '<p>Si no lo pediste, ignora este correo: no te enviaremos nada.</p>';
   MailApp.sendEmail({
@@ -292,18 +292,26 @@ function hoyLima_() {
   return deIso(Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd'));
 }
 
-function siguienteHabil_(d) {
-  var s = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-  while (!esHabil(s)) s.setDate(s.getDate() + 1);
-  return s;
+// Regla de los avisos (para lo que no esté marcado como presentado):
+// - un aviso cuando la obligación pasa a amarillo (faltan 7 días o menos), una sola vez por periodo;
+// - un aviso cada día mientras está en rojo (2 días o menos), incluidos los días después de vencer,
+//   hasta DIAS_AVISO_VENCIDA días de atraso (para no escribir sin fin por algo muy antiguo).
+var DIAS_AVISO_VENCIDA = 5;
+
+// Qué aviso le toca hoy a una obligación: 'ambar', 'rojo' o '' (ninguno)
+function tipoAviso_(it, token, hoyIso, enviados) {
+  if (it.hecho || !it.vence) return '';
+  var c = colorPorDias(it.dias);
+  if (c === 'a') return enviados[token + '|' + it.clave + '|ambar'] ? '' : 'ambar';
+  if (c === 'r' && it.dias >= -DIAS_AVISO_VENCIDA) return enviados[token + '|' + it.clave + '|rojo|' + hoyIso] ? '' : 'rojo';
+  return '';
 }
 
-// Revisa a quién le vence algo el día hábil siguiente y le envía el último aviso.
-// fechaIso permite simular otro día; con enviar = false solo registra en el log lo que enviaría.
+// Revisa todos los correos activos y envía los avisos que tocan hoy.
+// Con enviar = false solo registra en el log lo que enviaría (para probar con otra fecha).
 function revisarAvisos_(hoy, enviar) {
-  if (!esHabil(hoy)) { Logger.log(iso(hoy) + ' no es día hábil: no se envían avisos.'); return []; }
-  var manana = iso(siguienteHabil_(hoy));
-  var marcas = todasLasMarcas_();
+  var hoyIso = iso(hoy), marcas = todasLasMarcas_();
+  // Hoja Enviados: Token | "obligación:periodo|ambar" o "obligación:periodo|rojo|fecha" | Enviado el
   var hEnv = hojaEnviados_(), enviados = {};
   hEnv.getDataRange().getValues().slice(1).forEach(function (f) { enviados[f[0] + '|' + f[1]] = true; });
 
@@ -313,37 +321,54 @@ function revisarAvisos_(hoy, enviar) {
     var ruc = String(f[COL.ruc]), token = String(f[COL.token]), perfil = limpiarPerfil_(JSON.parse(f[COL.perfil] || '{}'));
     var items = obligaciones(perfil)
       .map(function (ob) { return evaluar(ob, hoy, Number(ruc[10]), marcas[ruc] || {}, perfil.regimen); })
-      .filter(function (it) { return !it.hecho && it.vence && iso(it.vence) === manana && !enviados[token + '|' + it.clave]; });
+      .map(function (it) { it.tipo = tipoAviso_(it, token, hoyIso, enviados); return it; })
+      .filter(function (it) { return it.tipo; })
+      .sort(function (a, b) { return a.dias - b.dias; });
     if (!items.length) return;
 
-    resumen.push(ruc + ' → ' + f[COL.correo] + ': ' + items.map(function (it) { return it.clave; }).join(', '));
+    resumen.push(ruc + ' → ' + f[COL.correo] + ': ' + items.map(function (it) { return it.clave + ' (' + it.tipo + ')'; }).join(', '));
     if (!enviar) return;
     if (MailApp.getRemainingDailyQuota() < 1) { Logger.log('Se acabó el cupo diario de correos.'); return; }
     correoAviso_(ruc, String(f[COL.correo]), token, items);
-    items.forEach(function (it) { agregarFila_(hEnv, [token, it.clave, ahora_()]); });
+    items.forEach(function (it) {
+      agregarFila_(hEnv, [token, it.clave + '|' + (it.tipo === 'ambar' ? 'ambar' : 'rojo|' + hoyIso), ahora_()]);
+    });
   });
-  Logger.log((enviar ? 'Enviados' : 'Se enviarían') + ' (' + iso(hoy) + ', vence ' + manana + '):\n' + (resumen.join('\n') || 'ninguno'));
+  Logger.log((enviar ? 'Enviados' : 'Se enviarían') + ' (' + hoyIso + '):\n' + (resumen.join('\n') || 'ninguno'));
   return resumen;
 }
 
+function textoPlazo_(d) {
+  if (d < 0) return 'venció hace ' + (-d) + (d === -1 ? ' día' : ' días');
+  if (d === 0) return 'vence hoy';
+  if (d === 1) return 'vence mañana';
+  return 'vence en ' + d + ' días';
+}
+
+// items: obligaciones con su tipo ('ambar' o 'rojo'), ordenadas de la más urgente a la menos
 function correoAviso_(ruc, correo, token, items, prueba) {
-  var vence = larga(items[0].vence), una = items.length === 1;
+  var rojo = items.some(function (it) { return it.tipo === 'rojo'; }), una = items.length === 1;
+  var titulo = rojo
+    ? 'Semáforo en rojo: ' + (una ? items[0].ob.nombre + ' ' + textoPlazo_(items[0].dias) : items.length + ' obligaciones en rojo')
+    : 'Semáforo en amarillo: ' + (una ? items[0].ob.nombre + ' vence el ' + larga(items[0].vence) : items.length + ' obligaciones vencen pronto');
   var lista = items.map(function (it) {
-    return '<li style="margin:0 0 12px"><b>' + it.ob.nombre + '</b>, ' + it.periodo + '<br>'
+    return '<li style="margin:0 0 14px"><b>' + it.ob.nombre + '</b>, ' + it.periodo + '<br>'
+      + '<span style="color:' + (it.tipo === 'rojo' ? '#B02A22' : '#8A5D00') + ';font-weight:bold">'
+      + textoPlazo_(it.dias).replace(/^./, function (c) { return c.toUpperCase(); }) + '</span> (' + larga(it.vence) + ')<br>'
       + boton_('Ya la presenté', urlApp_({ accion: 'presentada', t: token, c: it.clave })) + '</li>';
   }).join('');
-  var cuerpo = (prueba ? '<p style="padding:8px 12px;background:#FFF4D6;border-radius:6px">Correo de prueba: así se verá el último aviso, que se envía el día hábil anterior al vencimiento.</p>' : '')
-    + '<p>Hola:</p><p>Este es tu último aviso. Para el RUC <b>' + ruc + '</b>, '
-    + (una ? 'esta obligación vence' : 'estas obligaciones vencen') + ' el <b>' + vence + '</b>, el próximo día hábil:</p>'
+  var cuerpo = (prueba ? '<p style="padding:8px 12px;background:#FFF4D6;border-radius:6px">Correo de prueba: así se verán los avisos reales.</p>' : '')
+    + '<p>Hola:</p><p>' + (rojo ? 'Tu semáforo está en <b>rojo</b>' : 'Tu semáforo pasó a <b>amarillo</b>: quedan 7 días o menos') + ' para el RUC <b>' + ruc + '</b>:</p>'
     + '<ul style="padding-left:18px">' + lista + '</ul>'
     + '<p>Si la presentas fuera de plazo, la multa puede llegar a 1 UIT (S/ 5 500 en 2026) en el Régimen General y en el Régimen MYPE Tributario, además de intereses.</p>'
-    + '<p>Si ya la presentaste, márcala con «Ya la presenté» y no te volveremos a avisar por ese periodo.</p>';
+    + '<p>Si ya la presentaste, márcala con «Ya la presenté» y no te volveremos a avisar por ese periodo.'
+    + (rojo ? ' Mientras siga en rojo, te escribiremos cada día.' : ' Si no la marcas, te volveremos a escribir cuando pase a rojo.') + '</p>';
   MailApp.sendEmail({
     to: correo, name: 'Semáforo Tributario',
-    subject: (prueba ? '[Prueba] ' : '') + 'Semáforo en rojo: ' + (una ? items[0].ob.nombre + ' vence' : items.length + ' obligaciones vencen') + ' el ' + vence,
-    htmlBody: plantillaCorreo_('Semáforo en rojo: ' + (una ? 'tu declaración vence' : 'tus declaraciones vencen') + ' el ' + vence, cuerpo,
+    subject: (prueba ? '[Prueba] ' : '') + titulo,
+    htmlBody: plantillaCorreo_(titulo, cuerpo,
       '<a href="' + urlApp_({ ruc: ruc }) + '" style="color:#2A3E9E">Ver mi semáforo</a> &nbsp;|&nbsp; '
-      + '<a href="' + urlApp_({ accion: 'baja', t: token }) + '" style="color:#2A3E9E">Dejar de recibir avisos</a>')
+      + '<a href="' + urlApp_({ accion: 'baja', t: token }) + '" style="color:#2A3E9E">Dejar de recibir avisos</a>', rojo ? '#D1342B' : '#EAA000')
   });
 }
 
@@ -376,13 +401,16 @@ function probarCorreoAviso() {
   if (pendientes.length) items = pendientes;
   var primera = Math.min.apply(null, items.map(function (it) { return it.vence.getTime(); }));
   items = items.filter(function (it) { return it.vence.getTime() === primera; });
+  items.forEach(function (it) { it.tipo = colorPorDias(it.dias) === 'r' ? 'rojo' : 'ambar'; });
   correoAviso_(ruc, correo, String(f[COL.token]), items, true);
   Logger.log('Aviso de prueba enviado a ' + correo + ': ' + items.map(function (it) { return it.clave; }).join(', '));
 }
 
 // Prueba sin enviar correos: cambia la fecha y ejecútala desde el editor; el resultado sale en el registro
 function simularAvisos() {
-  revisarAvisos_(deIso('2026-11-13'), false);
+  ['2026-11-08', '2026-11-09', '2026-11-13', '2026-11-14', '2026-11-16', '2026-11-17'].forEach(function (d) {
+    revisarAvisos_(deIso(d), false);
+  });
 }
 
 // ---------- Páginas de los enlaces del correo ----------
@@ -419,7 +447,7 @@ function describirAccion(accion, token, clave) {
     var regimen = limpiarPerfil_(JSON.parse(fila.v[COL.perfil] || '{}')).regimen;
     // Solo se arma el texto de la acción pedida (describirClave_ necesita una obligación en c)
     datos.texto = {
-      confirmar: function () { return 'Recibirás en ' + fila.v[COL.correo] + ' un aviso un día hábil antes de cada vencimiento del RUC ' + ruc + ' que no hayas marcado como presentado.'; },
+      confirmar: function () { return 'Te escribiremos a ' + fila.v[COL.correo] + ' cuando una obligación del RUC ' + ruc + ' pase a amarillo y cada día que esté en rojo, hasta que la marques como presentada.'; },
       baja: function () { return 'Ya no te escribiremos a ' + fila.v[COL.correo] + ' sobre el RUC ' + ruc + '. Puedes volver a activarlos cuando quieras.'; },
       presentada: function () { return describirClave_(datos.c, regimen) + ', RUC ' + ruc + '.'; },
       deshacer: function () { return describirClave_(datos.c, regimen) + ' volverá a figurar como pendiente.'; }
@@ -438,7 +466,7 @@ function ejecutarAccion(accion, token, clave) {
     h.getRange(fila.n, COL.estado + 1).setValue(accion === 'confirmar' ? 'activo' : 'baja');
     if (accion === 'confirmar') h.getRange(fila.n, COL.confirmado + 1).setNumberFormat('@').setValue(ahora_());
     return accion === 'confirmar'
-      ? { titulo: 'Avisos activados', texto: 'Te escribiremos un día hábil antes de cada vencimiento que no hayas marcado como presentado.', enlace: verSemaforo }
+      ? { titulo: 'Avisos activados', texto: 'Te escribiremos cuando una obligación pase a amarillo y cada día que esté en rojo, hasta que la marques como presentada.', enlace: verSemaforo }
       : { titulo: 'Ya no recibirás avisos', texto: 'Si cambias de opinión, vuelve a activarlos desde tu semáforo.', enlace: verSemaforo };
   }
   marcarPresentada(ruc, clave, accion === 'presentada');
