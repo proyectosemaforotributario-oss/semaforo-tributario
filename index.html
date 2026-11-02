@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Semáforo Tributario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ---------- Tokens ---------- */
+  :root {
+    --papel: #EDF0EE;      /* fondo: papel bond gris verdoso */
+    --hoja: #FFFFFF;       /* superficies de lista */
+    --tinta: #16202A;      /* texto y botón principal */
+    --tinta-2: #56626C;    /* texto secundario */
+    --linea: #D2D8D5;
+    --sello: #2A3E9E;      /* tinta de tampón: todo lo "presentado" */
+    --sello-suave: #E4E8F7;
+    --rojo: #D1342B;   --rojo-texto: #B02A22;
+    --ambar: #EAA000;  --ambar-texto: #8A5D00;
+    --verde: #1D8C50;  --verde-texto: #17703F;
+    --gris: #8A939B;
+    --carcasa: #1E252C;    /* cuerpo del semáforo */
+    --lente: #36404A;      /* lente apagada */
+    --alerta-fondo: #FBEAE8;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --papel: #12171C; --hoja: #1A2128; --tinta: #E9EEF1; --tinta-2: #9AA6AF; --linea: #2E3841;
+      --sello: #93A5FF; --sello-suave: #222B4D;
+      --rojo-texto: #FF8A80; --ambar-texto: #F4B93A; --verde-texto: #5DD08F;
+      --carcasa: #0B0F13; --lente: #29323B; --alerta-fondo: #3A1F1D;
+      color-scheme: dark;
+    }
+  }
+
+  /* ---------- Base ---------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--papel); color: var(--tinta);
+    font-family: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 1.0625rem; line-height: 1.55;
+  }
+  .contenedor { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  @media (min-width: 720px) { .contenedor { padding: 0 32px; } }
+  a { color: var(--sello); }
+  :focus-visible { outline: 3px solid var(--sello); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- Barra superior ---------- */
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 0; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; }
+  .marca-luz { display: inline-flex; flex-direction: column; gap: 2px; background: var(--carcasa); padding: 3px; border-radius: 6px; }
+  .marca-luz i { width: 6px; height: 6px; border-radius: 50%; }
+  .marca-luz i:nth-child(1) { background: var(--rojo); }
+  .marca-luz i:nth-child(2) { background: var(--ambar); }
+  .marca-luz i:nth-child(3) { background: var(--verde); }
+  .barra small { color: var(--tinta-2); font-size: .875rem; text-align: right; }
+
+  /* ---------- Consulta (hero) ---------- */
+  .hero { display: grid; gap: 40px; padding: 24px 0 48px; align-items: center; }
+  @media (min-width: 880px) { .hero { grid-template-columns: 1.05fr .95fr; gap: 56px; padding-top: 40px; } }
+  h1 {
+    font-size: clamp(2.3rem, 6.4vw, 3.7rem); line-height: 1.04; letter-spacing: -.015em;
+    margin: 0 0 16px; max-width: 13ch; text-wrap: balance;
+  }
+  .bajada { color: var(--tinta-2); margin: 0 0 28px; max-width: 46ch; }
+  .etiqueta { display: block; font-weight: 700; margin-bottom: 8px; }
+  .fila-ruc { display: flex; gap: 10px; }
+  .fila-ruc input {
+    flex: 1; min-width: 0; height: 58px; padding: 0 16px;
+    font: inherit; font-size: 1.45rem; letter-spacing: .05em; font-variant-numeric: tabular-nums;
+    color: var(--tinta); background: var(--hoja); border: 2px solid var(--tinta); border-radius: 10px;
+  }
+  .fila-ruc input::placeholder { color: var(--gris); letter-spacing: .02em; }
+  .btn {
+    height: 58px; padding: 0 22px; border: 0; border-radius: 10px; cursor: pointer;
+    font: inherit; font-weight: 700; background: var(--tinta); color: var(--papel); white-space: nowrap;
+  }
+  .btn:hover { filter: brightness(1.15); }
+  .error { color: var(--rojo-texto); font-weight: 700; margin: 10px 0 0; }
+
+  .perfil { border: 0; padding: 0; margin: 28px 0 0; }
+  .perfil legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
+  .perfil-nota { color: var(--tinta-2); font-size: .9375rem; margin: 0 0 14px; }
+  .perfil select {
+    width: 100%; max-width: 360px; height: 48px; padding: 0 12px; font: inherit;
+    color: var(--tinta); background: var(--hoja); border: 1px solid var(--linea); border-radius: 8px;
+  }
+  .casillas { display: grid; gap: 6px 20px; margin-top: 14px; }
+  @media (min-width: 560px) { .casillas { grid-template-columns: 1fr 1fr; } }
+  .casilla { display: flex; gap: 10px; align-items: flex-start; font-size: .975rem; cursor: pointer; padding: 6px 0; }
+  .casilla input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--sello); flex: none; }
+
+  /* ---------- Semáforo grande ---------- */
+  .luz { display: flex; gap: 28px; align-items: center; }
+  .carcasa {
+    flex: none; display: flex; flex-direction: column; gap: 14px; padding: 16px;
+    background: var(--carcasa); border-radius: 46px;
+  }
+  .lente { width: 74px; height: 74px; border-radius: 50%; background: var(--lente); box-shadow: inset 0 5px 12px rgb(0 0 0 / .45); transition: background .3s, box-shadow .3s; }
+  @media (max-width: 480px) { .carcasa { gap: 10px; padding: 12px; border-radius: 36px; } .lente { width: 54px; height: 54px; } .luz { gap: 20px; } }
+  .carcasa[data-c="r"] .l-r { background: radial-gradient(circle at 38% 32%, #FF9A90, var(--rojo) 55%, #8C1D17); box-shadow: 0 0 30px 6px rgb(209 52 43 / .5); }
+  .carcasa[data-c="a"] .l-a { background: radial-gradient(circle at 38% 32%, #FFE08A, var(--ambar) 55%, #9A6500); box-shadow: 0 0 30px 6px rgb(234 160 0 / .5); }
+  .carcasa[data-c="v"] .l-v { background: radial-gradient(circle at 38% 32%, #8FE6B4, var(--verde) 55%, #0E5A31); box-shadow: 0 0 30px 6px rgb(29 140 80 / .45); }
+
+  .lectura p { margin: 0; }
+  .lectura-estado { font-weight: 700; }
+  .lectura-num { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 6px !important; }
+  .lectura-num b { font-size: clamp(4.6rem, 15vw, 7.4rem); line-height: .9; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .lectura-num span { font-size: 1.6rem; font-weight: 700; }
+  .lectura-detalle { color: var(--tinta-2); max-width: 30ch; }
+  .lectura-detalle b { color: var(--tinta); }
+  .lectura-vacia { color: var(--tinta-2); max-width: 24ch; }
+  .c-r { color: var(--rojo-texto); } .c-a { color: var(--ambar-texto); } .c-v { color: var(--verde-texto); } .c-g { color: var(--tinta-2); }
+
+  /* ---------- Resultado ---------- */
+  .resultado { padding-bottom: 56px; }
+  .ficha { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; align-items: baseline; padding: 20px 0; border-top: 2px solid var(--tinta); }
+  .ficha-nombre { font-size: 1.3rem; font-weight: 700; margin: 0; }
+  .ficha-ruc { color: var(--tinta-2); margin: 0; }
+  .ficha-estados { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .875rem; font-weight: 700; border: 1.5px solid currentColor; }
+  .tag.ok { color: var(--verde-texto); } .tag.mal { color: var(--rojo-texto); } .tag.nd { color: var(--tinta-2); }
+  .ficha-fuente { flex-basis: 100%; color: var(--tinta-2); font-size: .9rem; margin: 0; }
+  .alerta { background: var(--alerta-fondo); border-left: 4px solid var(--rojo); padding: 14px 16px; border-radius: 0 8px 8px 0; margin: 0 0 24px; }
+  .alerta b { color: var(--rojo-texto); }
+
+  .grupo { margin-top: 36px; }
+  .grupo h2 { font-size: 1.3rem; margin: 0; }
+  .grupo-nota { color: var(--tinta-2); margin: 2px 0 12px; font-size: .95rem; }
+  .lista { list-style: none; margin: 0; padding: 0; background: var(--hoja); border: 1px solid var(--linea); border-radius: 14px; }
+  .ob { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 18px; align-items: center; padding: 16px 18px; }
+  .ob + .ob { border-top: 1px solid var(--linea); }
+  .ob .mini { grid-row: 1 / span 2; align-self: start; margin-top: 3px; }
+  .ob h3 { font-size: 1.0625rem; margin: 0; }
+  .ob-form { grid-column: 2; color: var(--tinta-2); font-size: .925rem; margin: 0; }
+  .ob-plazo { grid-column: 3; grid-row: 1; text-align: right; }
+  .ob-plazo strong { display: block; font-size: 1.125rem; }
+  .ob-plazo span { color: var(--tinta-2); font-size: .925rem; }
+  .ob-accion { grid-column: 3; grid-row: 2; justify-self: end; margin-top: 6px; }
+  @media (max-width: 600px) {
+    .ob { grid-template-columns: auto 1fr; }
+    .ob-plazo { grid-column: 2; grid-row: auto; text-align: left; margin-top: 8px; }
+    .ob-accion { grid-column: 2; grid-row: auto; justify-self: start; }
+  }
+  .ob[data-c="g"] h3, .ob[data-c="g"] .ob-plazo strong { color: var(--tinta-2); }
+
+  .mini { display: inline-flex; flex-direction: column; gap: 3px; padding: 4px; background: var(--carcasa); border-radius: 9px; }
+  .mini i { width: 11px; height: 11px; border-radius: 50%; background: var(--lente); }
+  .mini[data-c="r"] i:nth-child(1) { background: var(--rojo); }
+  .mini[data-c="a"] i:nth-child(2) { background: var(--ambar); }
+  .mini[data-c="v"] i:nth-child(3), .mini[data-c="hecho"] i:nth-child(3) { background: var(--verde); }
+
+  .btn-marcar {
+    min-height: 42px; padding: 0 14px; border-radius: 8px; cursor: pointer;
+    font: inherit; font-size: .95rem; font-weight: 700;
+    color: var(--sello); background: transparent; border: 1.5px solid var(--sello);
+  }
+  .btn-marcar:hover { background: var(--sello-suave); }
+  .btn-deshacer { min-height: 42px; padding: 0 4px; border: 0; background: none; cursor: pointer; font: inherit; font-size: .925rem; color: var(--tinta-2); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Sello de recepción */
+  .sello {
+    --grano: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='70'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.2 1.75'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    display: inline-block; transform: rotate(-6deg); margin: 4px 6px;
+    padding: 5px 12px 4px; text-align: center; line-height: 1.05;
+    color: var(--sello); border: 3px solid var(--sello); border-radius: 6px;
+    outline: 1.5px solid var(--sello); outline-offset: 2px;
+    font-weight: 700; font-size: 1.05rem; letter-spacing: .14em;
+    -webkit-mask-image: var(--grano); mask-image: var(--grano);
+  }
+  .sello small { display: block; font-size: .7rem; letter-spacing: .1em; margin-top: 2px; }
+  .sello.recien { animation: estampar .32s cubic-bezier(.2, .8, .3, 1.2); }
+  @keyframes estampar {
+    from { transform: rotate(-6deg) scale(1.7); opacity: 0; }
+    to { transform: rotate(-6deg) scale(1); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sello.recien { animation: none; }
+    .lente { transition: none; }
+  }
+
+  .aclaracion { margin: 18px 0 0; color: var(--tinta-2); font-size: .925rem; }
+
+  details.calendario { margin-top: 36px; border-top: 1px solid var(--linea); padding-top: 16px; }
+  details.calendario summary { cursor: pointer; font-weight: 700; font-size: 1.125rem; }
+  .tabla-envoltura { overflow-x: auto; margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: .975rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--linea); white-space: nowrap; }
+  th { color: var(--tinta-2); font-weight: 700; }
+  tr.actual td { font-weight: 700; background: var(--hoja); }
+  .prov { color: var(--tinta-2); font-style: italic; }
+
+  footer { border-top: 1px solid var(--linea); padding: 20px 0 32px; color: var(--tinta-2); font-size: .875rem; }
+  footer p { margin: 0 0 8px; }
+  footer details summary { cursor: pointer; }
+  footer input { font: inherit; padding: 6px 8px; margin-top: 8px; border: 1px solid var(--linea); border-radius: 6px; background: var(--hoja); color: var(--tinta); }
+</style>
+</head>
+<body>
+
+<div class="contenedor">
+  <header class="barra">
+    <span class="marca"><span class="marca-luz" aria-hidden="true"><i></i><i></i><i></i></span>Semáforo Tributario</span>
+    <small>Prototipo para las MYPE de Moquegua</small>
+  </header>
+
+  <main>
+    <section class="hero" aria-label="Consulta por RUC">
+      <div>
+        <h1>¿Cuánto te falta para declarar?</h1>
+        <p class="bajada">Escribe tu RUC y te mostramos cada vencimiento del cronograma de la SUNAT, con su semáforo. No necesitas tu clave SOL.</p>
+
+        <form id="form" novalidate>
+          <label class="etiqueta" for="ruc">Tu número de RUC</label>
+          <div class="fila-ruc">
+            <input id="ruc" inputmode="numeric" maxlength="11" placeholder="20123456789" autocomplete="off" aria-describedby="error">
+            <button class="btn" type="submit">Ver mi semáforo</button>
+          </div>
+          <p class="error" id="error" role="alert" hidden></p>
+
+          <fieldset class="perfil" id="perfil">
+            <legend>Tu negocio</legend>
+            <p class="perfil-nota">Marca solo lo que te corresponde. Así no verás obligaciones que no tienes.</p>
+            <label class="etiqueta" for="regimen">Régimen tributario</label>
+            <select id="regimen">
+              <option value="RMT">Régimen MYPE Tributario (RMT)</option>
+              <option value="RG">Régimen General</option>
+              <option value="RER">Régimen Especial (RER)</option>
+              <option value="NRUS">Nuevo RUS</option>
+            </select>
+            <div class="casillas">
+              <label class="casilla"><input type="checkbox" id="trabajadores"> Tengo trabajadores en planilla</label>
+              <label class="casilla" id="casillaRegistros"><input type="checkbox" id="registros"> Llevo registros electrónicos de ventas y compras (SIRE o PLE)</label>
+              <label class="casilla" id="casillaRetencion"><input type="checkbox" id="retencion"> Soy agente de retención del IGV</label>
+              <label class="casilla" id="casillaPercepcion"><input type="checkbox" id="percepcion"> Soy agente de percepción del IGV</label>
+              <label class="casilla" id="casillaItan"><input type="checkbox" id="itan"> Pago el ITAN (activos netos mayores a S/ 1 millón)</label>
+            </div>
+          </fieldset>
+        </form>
+      </div>
+
+      <div class="luz" id="luz" aria-live="polite">
+        <div class="carcasa" id="carcasa" data-c="">
+          <span class="lente l-r"></span><span class="lente l-a"></span><span class="lente l-v"></span>
+        </div>
+        <div class="lectura" id="lectura">
+          <p class="lectura-vacia">Aquí verás cuántos días te quedan para tu próximo vencimiento.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="resultado" id="resultado" hidden>
+      <div class="alerta" id="alertaRuc" role="alert" hidden></div>
+      <div class="ficha">
+        <div>
+          <p class="ficha-nombre" id="fNombre">—</p>
+          <p class="ficha-ruc">RUC <span class="num" id="fRuc"></span></p>
+        </div>
+        <div class="ficha-estados" id="fEstados"></div>
+        <p class="ficha-fuente" id="fFuente"></p>
+      </div>
+
+      <div id="grupos"></div>
+
+      <p class="aclaracion">La confirmación es declarada por el usuario; no se verifica con SUNAT. Verde: más de 7 días. Amarillo: de 3 a 7 días. Rojo: 2 días o menos.</p>
+
+      <details class="calendario">
+        <summary id="calTitulo">Calendario del año</summary>
+        <div class="tabla-envoltura">
+          <table>
+            <thead id="calCabeza"></thead>
+            <tbody id="calCuerpo"></tbody>
+          </table>
+        </div>
+        <p class="aclaracion" id="calNota"></p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Prototipo académico del programa de Contabilidad, IESP «José Carlos Mariátegui», Moquegua, 2026. No reemplaza la asesoría de tu contador. Confirma las fechas en sunat.gob.pe.</p>
+    <details>
+      <summary>Probar con otra fecha</summary>
+      <label for="fechaSim">Calcular como si hoy fuera:</label><br>
+      <input id="fechaSim" type="date">
+    </details>
+  </footer>
+</div>
+
+<script>
+// ================= Fechas =================
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const DIAS_C = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+// Periodos (años) cuyo cronograma mensual ya publicó la SUNAT; los demás son provisionales
+const CRONOGRAMA_PUBLICADO = [2026];
+
+// Día hábil del mes siguiente al periodo, según el último dígito del RUC (R.S. 281-2022/SUNAT)
+const DIA_DECLARACION = { 0: 11, 1: 12, 2: 13, 3: 13, 4: 14, 5: 14, 6: 15, 7: 15, 8: 16, 9: 16 }; // Anexo I
+const DIA_REGISTROS   = { 0: 10, 1: 11, 2: 12, 3: 12, 4: 13, 5: 13, 6: 14, 7: 14, 8: 15, 9: 15 }; // Anexo II
+
+// Declaración anual del Impuesto a la Renta: fechas por último dígito (0..9), por ejercicio
+const RENTA_ANUAL = {
+  2025: { // R.S. 000386-2025/SUNAT
+    general: ['2026-03-26','2026-03-27','2026-03-30','2026-03-31','2026-04-01','2026-04-06','2026-04-07','2026-04-08','2026-04-09','2026-04-10'],
+    mype:    ['2026-05-27','2026-05-28','2026-05-29','2026-06-01','2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09']
+  }
+};
+
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const deIso = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const corta = d => `${DIAS_C[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+const larga = d => `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+const diasEntre = (a, b) => Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+const periodoTexto = (y, m) => `${MESES[m]} ${y}`;
+
+// Domingo de Pascua (algoritmo gregoriano anónimo)
+function pascua(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  return new Date(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1);
+}
+
+// Feriados nacionales del Perú
+const cacheFeriados = {};
+function feriados(y) {
+  if (cacheFeriados[y]) return cacheFeriados[y];
+  const fijos = ['01-01','05-01','06-07','06-29','07-23','07-28','07-29','08-06','08-30','10-08','11-01','12-08','12-09','12-25'];
+  const s = new Set(fijos.map(md => `${y}-${md}`));
+  const p = pascua(y);
+  s.add(iso(new Date(y, p.getMonth(), p.getDate() - 3))); // Jueves Santo
+  s.add(iso(new Date(y, p.getMonth(), p.getDate() - 2))); // Viernes Santo
+  return (cacheFeriados[y] = s);
+}
+const esHabil = d => d.getDay() !== 0 && d.getDay() !== 6 && !feriados(d.getFullYear()).has(iso(d));
+
+// n-ésimo día hábil del mes siguiente al periodo (y, m)
+function diaHabil(y, m, n) {
+  const d = new Date(y, m + 1, 1);
+  for (let c = 0; ; d.setDate(d.getDate() + 1)) {
+    if (esHabil(d) && ++c === n) return new Date(d);
+  }
+}
+
+// ================= RUC =================
+function errorRuc(ruc) {
+  if (ruc.length !== 11) return `El RUC tiene 11 dígitos y escribiste ${ruc.length}. Revisa que no falte ni sobre ninguno.`;
+  if (!/^(10|15|16|17|20)/.test(ruc)) return 'Un RUC empieza con 10, 15, 16, 17 o 20. Revisa los primeros dígitos.';
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  let dv = 11 - pesos.reduce((s, p, i) => s + p * Number(ruc[i]), 0) % 11;
+  if (dv === 10) dv = 0; else if (dv === 11) dv = 1;
+  if (dv !== Number(ruc[10])) return 'Ese RUC no existe: su último dígito no coincide con el dígito de verificación. Revisa que esté bien escrito.';
+  return '';
+}
+
+// ================= Datos: Apps Script o, en vista local, el navegador =================
+const enAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+const llamar = (fn, ...args) => new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args));
+
+const memoria = {};
+const local = {
+  leer(k) { try { const v = localStorage.getItem(k); return v === null ? null : JSON.parse(v); } catch (e) { return k in memoria ? memoria[k] : null; } },
+  guardar(k, v) { memoria[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+const datos = {
+  marcas: ruc => enAppsScript ? llamar('obtenerMarcas', ruc) : Promise.resolve(local.leer('st:marcas:' + ruc) || {}),
+  marcar(ruc, clave, presentada) {
+    if (enAppsScript) return llamar('marcarPresentada', ruc, clave, presentada);
+    const m = local.leer('st:marcas:' + ruc) || {};
+    if (presentada) m[clave] = iso(new Date()); else delete m[clave];
+    local.guardar('st:marcas:' + ruc, m);
+    return Promise.resolve(m);
+  },
+  ruc: ruc => enAppsScript ? llamar('consultarRuc', ruc) : Promise.resolve(null)
+};
+
+// ================= Obligaciones según el perfil =================
+function obligaciones(p) {
+  const L = [];
+  if (p.regimen === 'NRUS') {
+    L.push({ id: 'nrus', grupo: 'mensual', nombre: 'Cuota del Nuevo RUS', form: 'Formulario 1611 o Guía Pago Fácil' });
+  } else {
+    L.push({ id: 'f621', grupo: 'mensual', nombre: p.regimen === 'RER' ? 'IGV y Renta del RER' : 'IGV y pago a cuenta de Renta', form: 'Formulario 621 (Declara Fácil)' });
+  }
+  if (p.trabajadores) L.push({ id: 'plame', grupo: 'mensual', nombre: 'Planilla electrónica (PLAME)', form: 'Formulario 601: EsSalud, ONP y retenciones de renta' });
+  if (p.regimen !== 'NRUS') {
+    if (p.retencion) L.push({ id: 'ret', grupo: 'mensual', nombre: 'Retenciones del IGV', form: 'PDT 626' });
+    if (p.percepcion) L.push({ id: 'per', grupo: 'mensual', nombre: 'Percepciones del IGV', form: 'PDT 697' });
+    if (p.itan) L.push({ id: 'itan', grupo: 'mensual', nombre: 'Cuota del ITAN', form: 'Nueve cuotas, de abril a diciembre' });
+    if (p.registros) {
+      L.push({ id: 'rvie', grupo: 'registro', nombre: 'Registro de Ventas e Ingresos', form: 'SIRE o PLE' });
+      L.push({ id: 'rce', grupo: 'registro', nombre: 'Registro de Compras', form: 'SIRE o PLE' });
+    }
+  }
+  if (p.regimen === 'RMT' || p.regimen === 'RG') {
+    L.push({ id: 'anual', grupo: 'anual', nombre: 'Declaración anual de Renta', form: p.regimen === 'RMT' ? 'Formulario 710, cronograma MYPE' : 'Formulario 710' });
+  }
+  return L;
+}
+
+const colorPorDias = d => d <= 2 ? 'r' : d <= 7 ? 'a' : 'v';
+
+// Calcula el periodo que toca mostrar, su vencimiento y su estado
+function evaluar(ob, hoy, digito, marcas, regimen) {
+  if (ob.grupo === 'anual') return evaluarAnual(ob, hoy, digito, marcas, regimen);
+
+  const tabla = ob.grupo === 'registro' ? DIA_REGISTROS : DIA_DECLARACION;
+  // ITAN: solo periodos de marzo a noviembre (cuotas que vencen de abril a diciembre)
+  const ajustar = (y, m) => ob.id !== 'itan' ? [y, m] : m < 2 ? [y, 2] : m > 10 ? [y + 1, 2] : [y, m];
+
+  // Periodo que se declara este mes: el mes anterior (se muestra todo el mes, con su sello si ya se presentó)
+  const [y, m] = ajustar(...(hoy.getMonth() === 0 ? [hoy.getFullYear() - 1, 11] : [hoy.getFullYear(), hoy.getMonth() - 1]));
+  const vence = diaHabil(y, m, tabla[digito]);
+  const clave = `${ob.id}:${y}-${pad(m + 1)}`;
+  const dias = diasEntre(hoy, vence);
+  const extra = ob.id === 'itan' ? `cuota ${m - 1} de 9, ` : '';
+  return {
+    ob, clave, vence, dias, hecho: marcas[clave] || null,
+    periodo: `${extra}periodo ${periodoTexto(y, m)}`,
+    provisional: !CRONOGRAMA_PUBLICADO.includes(y)
+  };
+}
+
+function evaluarAnual(ob, hoy, digito, marcas, regimen) {
+  const fecha = ej => RENTA_ANUAL[ej] ? deIso(RENTA_ANUAL[ej][regimen === 'RMT' ? 'mype' : 'general'][digito]) : null;
+  const ej = hoy.getFullYear() - 1; // se presenta este año
+  const vence = fecha(ej), clave = `anual:${ej}`;
+  return {
+    ob, clave, vence, dias: vence ? diasEntre(hoy, vence) : null, hecho: marcas[clave] || null,
+    periodo: `ejercicio ${ej}`, sinFecha: !vence, anioPresenta: ej + 1
+  };
+}
+
+// ================= Estado de la pantalla =================
+const $ = id => document.getElementById(id);
+let actual = null; // { ruc, digito, marcas, datosRuc, fuente }
+let recienMarcada = null;
+
+function hoyConsulta() {
+  const v = $('fechaSim').value;
+  if (v) return deIso(v);
+  const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+}
+
+function perfil() {
+  return {
+    regimen: $('regimen').value,
+    trabajadores: $('trabajadores').checked, registros: $('registros').checked,
+    retencion: $('retencion').checked, percepcion: $('percepcion').checked, itan: $('itan').checked
+  };
+}
+function aplicarPerfil(p) {
+  $('regimen').value = p.regimen || 'RMT';
+  ['trabajadores', 'registros', 'retencion', 'percepcion', 'itan'].forEach(k => $(k).checked = !!p[k]);
+}
+function ajustarCasillas() {
+  const nrus = $('regimen').value === 'NRUS';
+  ['casillaRegistros', 'casillaRetencion', 'casillaPercepcion', 'casillaItan'].forEach(id => $(id).hidden = nrus);
+}
+
+async function consultar(e) {
+  if (e) e.preventDefault();
+  const ruc = $('ruc').value.trim();
+  const err = errorRuc(ruc);
+  $('error').textContent = err; $('error').hidden = !err;
+  if (err) { $('ruc').focus(); return; }
+
+  const guardado = local.leer('st:perfil:' + ruc);
+  if (guardado && (!actual || actual.ruc !== ruc)) { aplicarPerfil(guardado); ajustarCasillas(); }
+  actual = { ruc, digito: Number(ruc[10]), marcas: {}, datosRuc: null, fuente: 'Consultando el padrón de la SUNAT…' };
+
+  try { actual.marcas = await datos.marcas(ruc) || {}; }
+  catch (x) { mostrarError('No pudimos leer lo que marcaste antes. Vuelve a intentar en un momento.'); }
+  pintar();
+  $('resultado').hidden = false;
+  if (window.innerWidth < 880) $('luz').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const d = await datos.ruc(ruc);
+    actual.datosRuc = d;
+    actual.fuente = d ? 'Nombre, estado y condición según el padrón de la SUNAT.' : 'No pudimos consultar el padrón de la SUNAT. Verifica tu RUC en la Consulta RUC de la SUNAT.';
+  } catch (x) {
+    actual.fuente = 'No pudimos consultar el padrón de la SUNAT. Verifica tu RUC en la Consulta RUC de la SUNAT.';
+  }
+  if (actual.ruc === ruc) pintarFicha();
+}
+
+function mostrarError(t) { $('error').textContent = t; $('error').hidden = false; }
+
+const escapar = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const mini = c => `<span class="mini" data-c="${c}" aria-hidden="true"><i></i><i></i><i></i></span>`;
+
+function textoDias(d) {
+  if (d < 0) return `Venció hace ${-d} día${d === -1 ? '' : 's'}`;
+  if (d === 0) return 'Vence hoy';
+  if (d === 1) return 'Vence mañana';
+  return `Faltan ${d} días`;
+}
+
+function selloHtml(fechaIso, recien) {
+  const f = fechaIso ? deIso(String(fechaIso).slice(0, 10)) : null;
+  const fecha = f ? `${pad(f.getDate())} ${MESES[f.getMonth()].slice(0, 3).toUpperCase()} ${f.getFullYear()}` : '';
+  return `<span class="sello${recien ? ' recien' : ''}" role="img" aria-label="Presentada${f ? ' el ' + larga(f) : ''}">PRESENTADA<small>${fecha}</small></span>`;
+}
+
+function filaHtml(it) {
+  const { ob, clave, vence, dias, hecho } = it;
+  let c, plazo, accion;
+  if (hecho) {
+    c = 'hecho';
+    plazo = selloHtml(hecho, recienMarcada === clave);
+    accion = `<button class="btn-deshacer" data-clave="${clave}" data-si="0">Deshacer</button>`;
+  } else if (it.sinFecha) {
+    c = 'g';
+    plazo = `<strong>Fecha por publicar</strong><span>Se presenta en ${it.anioPresenta}</span>`;
+    accion = `<button class="btn-marcar" data-clave="${clave}" data-si="1">Ya la presenté</button>`;
+  } else {
+    c = colorPorDias(dias);
+    plazo = `<strong class="c-${c}">${textoDias(dias)}</strong><span class="num">${corta(vence)}${it.provisional ? ' (provisional)' : ''}</span>`;
+    accion = `<button class="btn-marcar" data-clave="${clave}" data-si="1">Ya la presenté</button>`;
+  }
+  return `<li class="ob" data-c="${c}">
+    ${mini(c)}
+    <h3>${ob.nombre}</h3>
+    <p class="ob-form">${ob.form}, ${it.periodo}</p>
+    <div class="ob-plazo">${plazo}</div>
+    <div class="ob-accion">${accion}</div>
+  </li>`;
+}
+
+const GRUPOS = [
+  { id: 'mensual', titulo: 'Declaraciones mensuales', nota: 'Declaración y pago del periodo, según el último dígito de tu RUC.' },
+  { id: 'registro', titulo: 'Registros electrónicos', nota: 'Fecha máxima de atraso: un día hábil antes de la declaración mensual.' },
+  { id: 'anual', titulo: 'Declaraciones anuales', nota: 'Fechas de la resolución que la SUNAT publica cada año.' }
+];
+
+function pintar() {
+  const p = perfil();
+  local.guardar('st:perfil:' + actual.ruc, p);
+  const hoy = hoyConsulta();
+  const items = obligaciones(p).map(ob => evaluar(ob, hoy, actual.digito, actual.marcas, p.regimen));
+
+  $('grupos').innerHTML = GRUPOS.map(g => {
+    const del = items.filter(it => it.ob.grupo === g.id);
+    if (!del.length) return '';
+    return `<section class="grupo"><h2>${g.titulo}</h2><p class="grupo-nota">${g.nota}</p><ol class="lista">${del.map(filaHtml).join('')}</ol></section>`;
+  }).join('');
+  recienMarcada = null;
+
+  pintarGeneral(items);
+  pintarFicha();
+  pintarCalendario(hoy, p);
+}
+
+// Semáforo general: rojo si hay obligaciones vencidas sin confirmar; si no, toma el color
+// de la obligación pendiente que vence primero
+function pintarGeneral(items) {
+  const pendientes = items.filter(it => !it.hecho && !it.sinFecha).sort((a, b) => a.dias - b.dias);
+  const vencidas = pendientes.filter(it => it.dias < 0);
+  const prox = pendientes.find(it => it.dias >= 0);
+  const c = vencidas.length ? 'r' : prox ? colorPorDias(prox.dias) : (items.some(it => it.hecho) ? 'v' : '');
+  $('carcasa').dataset.c = c;
+
+  const proxTexto = prox ? `Tu próximo vencimiento: <b>${prox.ob.nombre}</b>, el <b>${larga(prox.vence)}</b>.` : '';
+  if (vencidas.length) {
+    const n = vencidas.length, una = n === 1;
+    $('lectura').innerHTML = `<p class="lectura-estado c-r">Rojo: vencida${una ? '' : 's'} sin confirmar</p>
+      <p class="lectura-num c-r"><b>${n}</b><span>${una ? 'obligación vencida' : 'obligaciones vencidas'}</span></p>
+      <p class="lectura-detalle">Si ya ${una ? 'la' : 'las'} presentaste, ${una ? 'márcala' : 'márcalas'} abajo con «Ya la presenté». ${proxTexto}</p>`;
+    return;
+  }
+  if (!prox) {
+    $('lectura').innerHTML = `<p class="lectura-estado c-v">Todo presentado</p>
+      <p class="lectura-detalle">Marcaste como presentadas todas tus obligaciones pendientes. Te mostraremos la siguiente cuando empiece su periodo.</p>`;
+    return;
+  }
+  const etiqueta = { r: 'Rojo: 2 días o menos', a: 'Amarillo: faltan de 3 a 7 días', v: 'Verde: más de 7 días' };
+  const d = prox.dias;
+  const numero = d === 0
+    ? `<p class="lectura-num c-r"><b>Hoy</b></p>`
+    : `<p class="lectura-num"><b>${d}</b><span>día${d === 1 ? '' : 's'}</span></p>`;
+  $('lectura').innerHTML = `<p class="lectura-estado c-${c}">${etiqueta[c]}</p>${numero}
+    <p class="lectura-detalle">para presentar <b>${prox.ob.nombre}</b>, ${prox.periodo}. Vence el <b>${larga(prox.vence)}</b>.</p>`;
+}
+
+function pintarFicha() {
+  const { ruc, datosRuc: d } = actual;
+  $('fRuc').textContent = ruc;
+  $('fNombre').textContent = d && d.razon ? d.razon : 'Razón social sin verificar';
+  const tag = (v, bueno) => v ? `<span class="tag ${v === bueno ? 'ok' : 'mal'}">${escapar(v)}</span>` : '';
+  const est = d ? tag(d.estado, 'ACTIVO') + tag(d.condicion, 'HABIDO') : '';
+  $('fEstados').innerHTML = est || '<span class="tag nd">Estado sin verificar</span>';
+  $('fFuente').innerHTML = escapar(actual.fuente) + (d ? '' : ' <a href="https://e-consultaruc.sunat.gob.pe/cl-ti-itmrconsruc/FrameCriterioBusquedaWeb.jsp" target="_blank" rel="noopener">Abrir Consulta RUC</a>');
+
+  const problemas = [];
+  if (d && d.estado && d.estado !== 'ACTIVO') problemas.push(`tu RUC figura en estado <b>${escapar(d.estado)}</b>`);
+  if (d && d.condicion && d.condicion !== 'HABIDO') problemas.push(`tu domicilio fiscal figura como <b>${escapar(d.condicion)}</b>`);
+  $('alertaRuc').hidden = !problemas.length;
+  $('alertaRuc').innerHTML = problemas.length ? `Atención: según el padrón de la SUNAT, ${problemas.join(' y ')}. Consulta a tu contador para regularizarlo.` : '';
+}
+
+function pintarCalendario(hoy, p) {
+  const anio = hoy.getFullYear(), dg = actual.digito;
+  const conReg = p.registros && p.regimen !== 'NRUS';
+  const actualM = hoy.getMonth() === 0 ? -1 : hoy.getMonth() - 1;
+  $('calTitulo').textContent = `Calendario ${anio} de tu RUC (termina en ${dg})`;
+  $('calCabeza').innerHTML = `<tr><th>Periodo</th>${conReg ? '<th>Registros</th>' : ''}<th>Declaración mensual</th></tr>`;
+  let filas = '';
+  for (let m = 0; m < 12; m++) {
+    const prov = CRONOGRAMA_PUBLICADO.includes(anio) ? '' : ' <span class="prov">provisional</span>';
+    filas += `<tr class="${m === actualM ? 'actual' : ''}"><td>${MESES[m][0].toUpperCase() + MESES[m].slice(1)}</td>`
+      + (conReg ? `<td>${corta(diaHabil(anio, m, DIA_REGISTROS[dg]))}</td>` : '')
+      + `<td>${corta(diaHabil(anio, m, DIA_DECLARACION[dg]))}${prov}</td></tr>`;
+  }
+  $('calCuerpo').innerHTML = filas;
+
+  const t = RENTA_ANUAL[anio - 1];
+  const tieneAnual = p.regimen === 'RMT' || p.regimen === 'RG';
+  $('calNota').textContent = !tieneAnual ? ''
+    : t ? `Declaración anual de Renta ${anio - 1}: ${larga(deIso(t[p.regimen === 'RMT' ? 'mype' : 'general'][dg]))}.`
+        : `Declaración anual de Renta ${anio - 1}: la SUNAT aún no publica su cronograma.`;
+}
+
+// ================= Eventos =================
+$('form').addEventListener('submit', consultar);
+$('ruc').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
+$('perfil').addEventListener('change', () => { ajustarCasillas(); if (actual) pintar(); });
+$('fechaSim').addEventListener('change', () => actual && pintar());
+
+$('grupos').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-clave]');
+  if (!b || !actual) return;
+  const clave = b.dataset.clave, si = b.dataset.si === '1';
+  const antes = actual.marcas[clave];
+  // Se muestra el cambio al instante y se guarda en segundo plano
+  if (si) { actual.marcas[clave] = iso(new Date()); recienMarcada = clave; } else delete actual.marcas[clave];
+  pintar();
+  try {
+    await datos.marcar(actual.ruc, clave, si);
+    $('error').hidden = true;
+  } catch (x) {
+    if (antes) actual.marcas[clave] = antes; else delete actual.marcas[clave];
+    pintar();
+    mostrarError('No se pudo guardar el cambio. Revisa tu conexión e inténtalo otra vez.');
+  }
+});
+
+// Vista local: permite ?fecha=AAAA-MM-DD&ruc=... para pruebas
+try {
+  const q = new URLSearchParams(location.search);
+  if (q.get('fecha')) $('fechaSim').value = q.get('fecha');
+  if (q.get('ruc')) { $('ruc').value = q.get('ruc'); consultar(); }
+} catch (e) {}
+ajustarCasillas();
+</script>
+</body>
+</html>
