@@ -70,13 +70,13 @@
   }
   .bajada { color: var(--tinta-2); margin: 0 0 28px; max-width: 46ch; }
   .etiqueta { display: block; font-weight: 700; margin-bottom: 8px; }
-  .fila-ruc { display: flex; gap: 10px; }
-  .fila-ruc input {
+  .fila-campo { display: flex; gap: 10px; }
+  .fila-campo input {
     flex: 1; min-width: 0; height: 58px; padding: 0 16px;
     font: inherit; font-size: 1.45rem; letter-spacing: .05em; font-variant-numeric: tabular-nums;
     color: var(--tinta); background: var(--hoja); border: 2px solid var(--tinta); border-radius: 10px;
   }
-  .fila-ruc input::placeholder { color: var(--gris); letter-spacing: .02em; }
+  .fila-campo input::placeholder { color: var(--gris); letter-spacing: .02em; }
   .btn {
     height: 58px; padding: 0 22px; border: 0; border-radius: 10px; cursor: pointer;
     font: inherit; font-weight: 700; background: var(--tinta); color: var(--papel); white-space: nowrap;
@@ -187,6 +187,17 @@
 
   .aclaracion { margin: 18px 0 0; color: var(--tinta-2); font-size: .925rem; }
 
+  /* Activar avisos */
+  .avisos { margin-top: 40px; padding: 24px 20px; background: var(--hoja); border: 2px solid var(--tinta); border-radius: 14px; }
+  .avisos h2 { font-size: 1.3rem; margin: 0; }
+  .avisos .grupo-nota { margin-bottom: 18px; max-width: 60ch; }
+  .fila-campo input[type="email"] { font-size: 1.15rem; letter-spacing: 0; }
+  .avisos .casilla { margin-top: 12px; max-width: 64ch; }
+  .aviso-listo { display: flex; gap: 14px; align-items: flex-start; }
+  .aviso-listo p { margin: 0; max-width: 56ch; }
+  .sobre { flex: none; width: 44px; height: 32px; border: 2px solid var(--sello); border-radius: 4px; position: relative; overflow: hidden; margin-top: 2px; }
+  .sobre::before { content: ""; position: absolute; left: 50%; top: -22px; width: 30px; height: 30px; border: 2px solid var(--sello); transform: translateX(-50%) rotate(45deg); }
+
   details.calendario { margin-top: 36px; border-top: 1px solid var(--linea); padding-top: 16px; }
   details.calendario summary { cursor: pointer; font-weight: 700; font-size: 1.125rem; }
   .tabla-envoltura { overflow-x: auto; margin-top: 12px; }
@@ -218,7 +229,7 @@
 
         <form id="form" novalidate>
           <label class="etiqueta" for="ruc">Tu número de RUC</label>
-          <div class="fila-ruc">
+          <div class="fila-campo">
             <input id="ruc" inputmode="numeric" maxlength="11" placeholder="20123456789" autocomplete="off" aria-describedby="error">
             <button class="btn" type="submit">Ver mi semáforo</button>
           </div>
@@ -268,7 +279,25 @@
 
       <div id="grupos"></div>
 
-      <p class="aclaracion">La confirmación es declarada por el usuario; no se verifica con SUNAT. Verde: más de 7 días. Amarillo: de 3 a 7 días. Rojo: 2 días o menos.</p>
+      <p class="aclaracion">La confirmación es declarada por el usuario; no se verifica con SUNAT. Al marcar «Ya la presenté» guardamos tu RUC y la marca para mostrártela en tu próxima visita. Verde: más de 7 días. Amarillo: de 3 a 7 días. Rojo: 2 días o menos.</p>
+
+      <section class="avisos" aria-labelledby="avisosTitulo">
+        <h2 id="avisosTitulo">Recibe un aviso por correo</h2>
+        <p class="grupo-nota">Te escribimos un día hábil antes de cada vencimiento que no hayas marcado como presentado. Si cambias las casillas de «Tu negocio», vuelve a activarlos para actualizar tus avisos.</p>
+        <form id="formAvisos" novalidate>
+          <label class="etiqueta" for="correo">Tu correo</label>
+          <div class="fila-campo">
+            <input id="correo" type="email" autocomplete="email" placeholder="nombre@gmail.com">
+            <button class="btn" type="submit">Activar avisos</button>
+          </div>
+          <label class="casilla"><input type="checkbox" id="autorizo"> Autorizo que se guarden mi RUC, mi correo y las casillas de «Tu negocio» para enviarme estos avisos (Ley N.° 29733). Puedo darme de baja desde cualquier correo.</label>
+          <p class="error" id="errorAvisos" role="alert" hidden></p>
+        </form>
+        <div class="aviso-listo" id="avisoListo" role="status" hidden>
+          <span class="sobre" aria-hidden="true"></span>
+          <p id="avisoTexto"></p>
+        </div>
+      </section>
 
       <details class="calendario">
         <summary id="calTitulo">Calendario del año</summary>
@@ -294,6 +323,7 @@
 </div>
 
 <script>
+// <calendario> Bloque compartido con el servidor: sincronizar.js lo copia a Calendario.gs
 // ================= Fechas =================
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
@@ -362,28 +392,6 @@ function errorRuc(ruc) {
   return '';
 }
 
-// ================= Datos: Apps Script o, en vista local, el navegador =================
-const enAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
-const llamar = (fn, ...args) => new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args));
-
-const memoria = {};
-const local = {
-  leer(k) { try { const v = localStorage.getItem(k); return v === null ? null : JSON.parse(v); } catch (e) { return k in memoria ? memoria[k] : null; } },
-  guardar(k, v) { memoria[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
-};
-
-const datos = {
-  marcas: ruc => enAppsScript ? llamar('obtenerMarcas', ruc) : Promise.resolve(local.leer('st:marcas:' + ruc) || {}),
-  marcar(ruc, clave, presentada) {
-    if (enAppsScript) return llamar('marcarPresentada', ruc, clave, presentada);
-    const m = local.leer('st:marcas:' + ruc) || {};
-    if (presentada) m[clave] = iso(new Date()); else delete m[clave];
-    local.guardar('st:marcas:' + ruc, m);
-    return Promise.resolve(m);
-  },
-  ruc: ruc => enAppsScript ? llamar('consultarRuc', ruc) : Promise.resolve(null)
-};
-
 // ================= Obligaciones según el perfil =================
 function obligaciones(p) {
   const L = [];
@@ -440,6 +448,31 @@ function evaluarAnual(ob, hoy, digito, marcas, regimen) {
     periodo: `ejercicio ${ej}`, sinFecha: !vence, anioPresenta: ej + 1
   };
 }
+// </calendario>
+
+// ================= Datos: Apps Script o, en vista local, el navegador =================
+const enAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+const llamar = (fn, ...args) => new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args));
+
+const memoria = {};
+const local = {
+  leer(k) { try { const v = localStorage.getItem(k); return v === null ? null : JSON.parse(v); } catch (e) { return k in memoria ? memoria[k] : null; } },
+  guardar(k, v) { memoria[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+const datos = {
+  marcas: ruc => enAppsScript ? llamar('obtenerMarcas', ruc) : Promise.resolve(local.leer('st:marcas:' + ruc) || {}),
+  marcar(ruc, clave, presentada) {
+    if (enAppsScript) return llamar('marcarPresentada', ruc, clave, presentada);
+    const m = local.leer('st:marcas:' + ruc) || {};
+    if (presentada) m[clave] = iso(new Date()); else delete m[clave];
+    local.guardar('st:marcas:' + ruc, m);
+    return Promise.resolve(m);
+  },
+  ruc: ruc => enAppsScript ? llamar('consultarRuc', ruc) : Promise.resolve(null),
+  // En la vista local no hay correo: se simula el registro
+  avisar: (ruc, correo, perfil) => enAppsScript ? llamar('registrarAviso', ruc, correo, perfil, true) : Promise.resolve({ estado: 'pendiente' })
+};
 
 // ================= Estado de la pantalla =================
 const $ = id => document.getElementById(id);
@@ -476,7 +509,10 @@ async function consultar(e) {
   if (err) { $('ruc').focus(); return; }
 
   const guardado = local.leer('st:perfil:' + ruc);
-  if (guardado && (!actual || actual.ruc !== ruc)) { aplicarPerfil(guardado); ajustarCasillas(); }
+  if (!actual || actual.ruc !== ruc) {
+    if (guardado) { aplicarPerfil(guardado); ajustarCasillas(); }
+    $('formAvisos').hidden = false; $('avisoListo').hidden = true; $('errorAvisos').hidden = true;
+  }
   actual = { ruc, digito: Number(ruc[10]), marcas: {}, datosRuc: null, fuente: 'Consultando el padrón de la SUNAT…' };
 
   try { actual.marcas = await datos.marcas(ruc) || {}; }
@@ -655,13 +691,39 @@ $('grupos').addEventListener('click', async e => {
   }
 });
 
-// Vista local: permite ?fecha=AAAA-MM-DD&ruc=... para pruebas
-try {
-  const q = new URLSearchParams(location.search);
-  if (q.get('fecha')) $('fechaSim').value = q.get('fecha');
-  if (q.get('ruc')) { $('ruc').value = q.get('ruc'); consultar(); }
-} catch (e) {}
+$('formAvisos').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!actual) return;
+  const correo = $('correo').value.trim();
+  const fallo = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo) ? 'Escribe un correo completo, por ejemplo nombre@gmail.com.'
+    : !$('autorizo').checked ? 'Para enviarte avisos necesitamos tu autorización: marca la casilla.' : '';
+  $('errorAvisos').textContent = fallo; $('errorAvisos').hidden = !fallo;
+  if (fallo) return;
+
+  const boton = e.submitter || $('formAvisos').querySelector('button');
+  boton.disabled = true; boton.textContent = 'Activando…';
+  try {
+    const r = await datos.avisar(actual.ruc, correo, perfil());
+    $('avisoTexto').innerHTML = r.estado === 'activo'
+      ? `Tus avisos ya estaban activos para <b>${escapar(correo)}</b>. Actualizamos las obligaciones de «Tu negocio».`
+      : `Te enviamos un correo a <b>${escapar(correo)}</b>. Ábrelo y pulsa «Confirmar avisos» para activarlos. Si no lo ves en unos minutos, revisa la carpeta de spam.`;
+    $('formAvisos').hidden = true; $('avisoListo').hidden = false;
+  } catch (x) {
+    $('errorAvisos').textContent = 'No pudimos activar los avisos. Revisa tu conexión e inténtalo otra vez.';
+    $('errorAvisos').hidden = false;
+  } finally {
+    boton.disabled = false; boton.textContent = 'Activar avisos';
+  }
+});
+
+// Abre directo el semáforo de un RUC con ?ruc=... (enlace "Ver mi semáforo" de los correos)
+function abrirConParametros(p) {
+  if (p.fecha) $('fechaSim').value = p.fecha;
+  if (p.ruc) { $('ruc').value = String(p.ruc).replace(/\D/g, ''); consultar(); }
+}
 ajustarCasillas();
+if (enAppsScript) google.script.url.getLocation(loc => abrirConParametros(loc.parameter || {}));
+else try { abrirConParametros(Object.fromEntries(new URLSearchParams(location.search))); } catch (e) {}
 </script>
 </body>
 </html>
