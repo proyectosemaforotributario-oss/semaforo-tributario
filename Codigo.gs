@@ -2,12 +2,35 @@
 // Tokens de las API: Configuración del proyecto > Propiedades del script (nunca en el código).
 // Las fechas y obligaciones vienen de Calendario.gs (generado desde index.html con "node sincronizar.js").
 
+// La página se publica en GitHub Pages (propiedad URL_SITIO) y llama a este script como API (doPost).
+// Este doGet queda como respaldo: sirve las mismas páginas desde Apps Script.
 function doGet(e) {
   var p = (e && e.parameter) || {};
-  if (p.accion) return paginaAccion_(p);
-  return HtmlService.createHtmlOutputFromFile('index')
+  return HtmlService.createHtmlOutputFromFile(p.accion ? 'accion' : 'index')
     .setTitle('Semáforo Tributario')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// API: recibe {"fn": "...", "args": [...]} y responde {"ok": true, "data": ...} o {"ok": false, "error": "..."}
+var API_PUBLICA = {
+  obtenerMarcas: function (a) { return obtenerMarcas(a[0]); },
+  marcarPresentada: function (a) { return marcarPresentada(a[0], a[1], a[2]); },
+  consultarRuc: function (a) { return consultarRuc(a[0]); },
+  registrarAviso: function (a) { return registrarAviso(a[0], a[1], a[2], a[3]); },
+  describirAccion: function (a) { return describirAccion(a[0], a[1], a[2]); },
+  ejecutarAccion: function (a) { return ejecutarAccion(a[0], a[1], a[2]); }
+};
+
+function doPost(e) {
+  var r;
+  try {
+    var q = JSON.parse(e.postData.contents);
+    if (!API_PUBLICA.hasOwnProperty(q.fn)) throw new Error('Función no permitida');
+    r = { ok: true, data: API_PUBLICA[q.fn](q.args || []) };
+  } catch (x) {
+    r = { ok: false, error: String(x && x.message || x) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(r)).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ---------- RUC ----------
@@ -182,8 +205,10 @@ function hojaEnviados_() {
   return hoja_('Enviados', ['Token', 'Obligación:periodo', 'Enviado el']);
 }
 
+// Enlaces de los correos: a la página en GitHub Pages (URL_SITIO) o, si aún no existe, a este script
 function urlApp_(params) {
-  var base = PropertiesService.getScriptProperties().getProperty('URL_APP') || ScriptApp.getService().getUrl();
+  var sitio = PropertiesService.getScriptProperties().getProperty('URL_SITIO');
+  var base = sitio ? sitio.replace(/\/?$/, '/') + (params.accion ? 'accion.html' : '') : ScriptApp.getService().getUrl();
   return base + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
 }
 
@@ -357,9 +382,11 @@ var PREGUNTAS = {
   deshacer: { titulo: '¿Deshacer la marca?', boton: 'Deshacer' }
 };
 
-function paginaAccion_(p) {
-  var datos = { accion: p.accion, t: p.t || '', c: p.c || '' };
-  var fila = PREGUNTAS[p.accion] && p.t ? buscarFila_(hojaAvisos_(), COL.token, String(p.t)) : null;
+// La llama accion.html al abrirse: devuelve la pregunta que se muestra antes de pulsar el botón
+function describirAccion(accion, token, clave) {
+  var p = { accion: String(accion || ''), t: String(token || ''), c: String(clave || '') };
+  var datos = { accion: p.accion, t: p.t, c: p.c };
+  var fila = PREGUNTAS.hasOwnProperty(p.accion) && p.t ? buscarFila_(hojaAvisos_(), COL.token, p.t) : null;
   if (!fila || ((p.accion === 'presentada' || p.accion === 'deshacer') && !CLAVE_VALIDA.test(datos.c))) {
     datos.titulo = 'Este enlace no funciona';
     datos.texto = 'Puede que esté incompleto o que sea antiguo. Abre el semáforo y vuelve a activar los avisos.';
@@ -375,15 +402,13 @@ function paginaAccion_(p) {
       deshacer: describirClave_(datos.c, limpiarPerfil_(JSON.parse(fila.v[COL.perfil] || '{}')).regimen) + ' volverá a figurar como pendiente.'
     }[p.accion];
   }
-  var t = HtmlService.createTemplateFromFile('pagina');
-  t.datosJson = JSON.stringify(datos).replace(/</g, '\\u003c');
-  return t.evaluate().setTitle('Semáforo Tributario').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return datos;
 }
 
-// La llama el botón de pagina.html
+// La llama el botón de accion.html
 function ejecutarAccion(accion, token, clave) {
   var h = hojaAvisos_(), fila = buscarFila_(h, COL.token, String(token));
-  if (!fila || !PREGUNTAS[accion]) throw new Error('Enlace no válido');
+  if (!fila || !PREGUNTAS.hasOwnProperty(accion)) throw new Error('Enlace no válido');
   var ruc = String(fila.v[COL.ruc]), verSemaforo = { texto: 'Ver mi semáforo', url: urlApp_({ ruc: ruc }) };
 
   if (accion === 'confirmar' || accion === 'baja') {

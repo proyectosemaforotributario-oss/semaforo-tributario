@@ -450,9 +450,26 @@ function evaluarAnual(ob, hoy, digito, marcas, regimen) {
 }
 // </calendario>
 
-// ================= Datos: Apps Script o, en vista local, el navegador =================
-const enAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
-const llamar = (fn, ...args) => new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args));
+// ================= Datos: motor en Apps Script o, en vista local, el navegador =================
+// La página (GitHub Pages o Apps Script) llama al motor sin las cuentas de Google del navegador
+// (credentials: 'omit'): así no falla cuando hay varias cuentas abiertas.
+const API = 'https://script.google.com/macros/s/AKfycbyWJAYQV7JqaZumovP1n605C0l_3RGg3ZlVguKzowWR9PY169_C4WzbxB8orSUr0vmk/exec';
+const enLinea = /^https?:$/.test(location.protocol); // falso al abrir el archivo en el PC
+async function llamar(fn, ...args) {
+  const r = await fetch(API, {
+    method: 'POST', credentials: 'omit',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita la consulta previa de CORS
+    body: JSON.stringify({ fn, args })
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error);
+  return j.data;
+}
+// Parámetros de la dirección (?ruc=...): dentro de Apps Script se leen con google.script.url
+const parametros = () => new Promise(ok => {
+  if (typeof google !== 'undefined' && google.script && google.script.url) google.script.url.getLocation(l => ok(l.parameter || {}));
+  else { try { ok(Object.fromEntries(new URLSearchParams(location.search))); } catch (e) { ok({}); } }
+});
 
 const memoria = {};
 const local = {
@@ -461,21 +478,21 @@ const local = {
 };
 
 const datos = {
-  marcas: ruc => enAppsScript ? llamar('obtenerMarcas', ruc) : Promise.resolve(local.leer('st:marcas:' + ruc) || {}),
+  marcas: ruc => enLinea ? llamar('obtenerMarcas', ruc) : Promise.resolve(local.leer('st:marcas:' + ruc) || {}),
   marcar(ruc, clave, presentada) {
-    if (enAppsScript) return llamar('marcarPresentada', ruc, clave, presentada);
+    if (enLinea) return llamar('marcarPresentada', ruc, clave, presentada);
     const m = local.leer('st:marcas:' + ruc) || {};
     if (presentada) m[clave] = iso(new Date()); else delete m[clave];
     local.guardar('st:marcas:' + ruc, m);
     return Promise.resolve(m);
   },
   // Vista local: ?padron=demo simula una respuesta del padrón para revisar el diseño
-  ruc: ruc => enAppsScript ? llamar('consultarRuc', ruc)
+  ruc: ruc => enLinea ? llamar('consultarRuc', ruc)
     : Promise.resolve(location.search.includes('padron=demo')
       ? { razon: 'COMERCIAL MOQUEGUA S.A.C.', estado: 'ACTIVO', condicion: 'NO HABIDO', agenteRetencion: true, buenContribuyente: false, fuente: 'Decolecta', consultado: iso(new Date()) }
       : null),
   // En la vista local no hay correo: se simula el registro
-  avisar: (ruc, correo, perfil) => enAppsScript ? llamar('registrarAviso', ruc, correo, perfil, true) : Promise.resolve({ estado: 'pendiente' })
+  avisar: (ruc, correo, perfil) => enLinea ? llamar('registrarAviso', ruc, correo, perfil, true) : Promise.resolve({ estado: 'pendiente' })
 };
 
 // ================= Estado de la pantalla =================
@@ -738,8 +755,7 @@ function abrirConParametros(p) {
   if (p.ruc) { $('ruc').value = String(p.ruc).replace(/\D/g, ''); consultar(); }
 }
 ajustarCasillas();
-if (enAppsScript) google.script.url.getLocation(loc => abrirConParametros(loc.parameter || {}));
-else try { abrirConParametros(Object.fromEntries(new URLSearchParams(location.search))); } catch (e) {}
+parametros().then(abrirConParametros);
 </script>
 </body>
 </html>

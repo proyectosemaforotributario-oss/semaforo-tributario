@@ -20,7 +20,7 @@
   *, *::before, *::after { box-sizing: border-box; }
   body { margin: 0; background: var(--papel); color: var(--tinta); font-family: "Atkinson Hyperlegible", system-ui, sans-serif; font-size: 1.0625rem; line-height: 1.55; }
   main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
-  .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 40px; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 40px; color: inherit; text-decoration: none; }
   .marca-luz { display: inline-flex; flex-direction: column; gap: 2px; background: var(--carcasa); padding: 3px; border-radius: 6px; }
   .marca-luz i { width: 6px; height: 6px; border-radius: 50%; }
   .marca-luz i:nth-child(1) { background: var(--rojo); } .marca-luz i:nth-child(2) { background: var(--ambar); } .marca-luz i:nth-child(3) { background: var(--verde); }
@@ -31,6 +31,7 @@
   a { color: var(--sello); }
   :focus-visible { outline: 3px solid var(--sello); outline-offset: 2px; }
   .error { color: var(--rojo-texto); font-weight: 700; }
+  .cargando { color: var(--tinta-2); }
   .sello {
     display: inline-block; transform: rotate(-6deg); margin: 4px 0 24px; padding: 6px 16px 5px;
     color: var(--sello); border: 3px solid var(--sello); border-radius: 6px; outline: 1.5px solid var(--sello); outline-offset: 2px;
@@ -43,23 +44,41 @@
 </head>
 <body>
 <main>
-  <div class="marca"><span class="marca-luz" aria-hidden="true"><i></i><i></i><i></i></span>Semáforo Tributario</div>
+  <a class="marca" href="./"><span class="marca-luz" aria-hidden="true"><i></i><i></i><i></i></span>Semáforo Tributario</a>
   <div aria-live="polite">
     <span class="sello" id="sello" hidden>PRESENTADA</span>
     <h1 id="titulo"></h1>
-    <p id="texto"></p>
+    <p id="texto" class="cargando">Cargando…</p>
   </div>
   <button class="btn" id="boton" hidden></button>
   <p class="error" id="error" role="alert" hidden></p>
   <p id="enlaces"></p>
 </main>
 <script>
-const DATOS = <?!= datosJson ?>;
+// Página de los enlaces del correo (confirmar, dar de baja, "Ya la presenté", deshacer).
+// Muestra una pregunta y la acción solo ocurre al pulsar el botón.
+const API = 'https://script.google.com/macros/s/AKfycbyWJAYQV7JqaZumovP1n605C0l_3RGg3ZlVguKzowWR9PY169_C4WzbxB8orSUr0vmk/exec';
 const $ = id => document.getElementById(id);
+
+async function llamar(fn, ...args) {
+  const r = await fetch(API, {
+    method: 'POST', credentials: 'omit',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn, args })
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error);
+  return j.data;
+}
+const parametros = () => new Promise(ok => {
+  if (typeof google !== 'undefined' && google.script && google.script.url) google.script.url.getLocation(l => ok(l.parameter || {}));
+  else { try { ok(Object.fromEntries(new URLSearchParams(location.search))); } catch (e) { ok({}); } }
+});
 
 function mostrar(d) {
   $('titulo').textContent = d.titulo;
   $('texto').textContent = d.texto || '';
+  $('texto').className = '';
   $('sello').hidden = !d.sello;
   $('enlaces').innerHTML = '';
   if (d.enlace) $('enlaces').append(enlace(d.enlace.texto, d.enlace.url));
@@ -70,23 +89,22 @@ function enlace(texto, url) {
   a.textContent = texto; a.href = url; a.target = '_top';
   return a;
 }
+function fallo(t) { $('error').textContent = t; $('error').hidden = false; }
 
-mostrar(DATOS);
-if (DATOS.boton) {
-  $('boton').textContent = DATOS.boton;
+parametros().then(async p => {
+  let d;
+  try { d = await llamar('describirAccion', p.accion, p.t, p.c); }
+  catch (e) { $('texto').textContent = ''; fallo('No pudimos abrir este enlace. Revisa tu conexión y vuelve a cargar la página.'); return; }
+  mostrar(d);
+  if (!d.boton) return;
+  $('boton').textContent = d.boton;
   $('boton').hidden = false;
-  $('boton').addEventListener('click', () => {
+  $('boton').addEventListener('click', async () => {
     $('boton').disabled = true; $('error').hidden = true;
-    google.script.run
-      .withSuccessHandler(r => { $('boton').hidden = true; mostrar(r); })
-      .withFailureHandler(() => {
-        $('boton').disabled = false;
-        $('error').textContent = 'No se pudo completar. Revisa tu conexión e inténtalo otra vez.';
-        $('error').hidden = false;
-      })
-      .ejecutarAccion(DATOS.accion, DATOS.t, DATOS.c);
+    try { mostrar(await llamar('ejecutarAccion', d.accion, d.t, d.c)); $('boton').hidden = true; }
+    catch (e) { $('boton').disabled = false; fallo('No se pudo completar. Revisa tu conexión e inténtalo otra vez.'); }
   });
-}
+});
 </script>
 </body>
 </html>
