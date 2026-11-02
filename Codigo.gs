@@ -396,12 +396,14 @@ function describirAccion(accion, token, clave) {
     var ruc = String(fila.v[COL.ruc]), q = PREGUNTAS[p.accion];
     datos.titulo = q.titulo;
     datos.boton = q.boton;
+    var regimen = limpiarPerfil_(JSON.parse(fila.v[COL.perfil] || '{}')).regimen;
+    // Solo se arma el texto de la acción pedida (describirClave_ necesita una obligación en c)
     datos.texto = {
-      confirmar: 'Recibirás en ' + fila.v[COL.correo] + ' un aviso un día hábil antes de cada vencimiento del RUC ' + ruc + ' que no hayas marcado como presentado.',
-      baja: 'Ya no te escribiremos a ' + fila.v[COL.correo] + ' sobre el RUC ' + ruc + '. Puedes volver a activarlos cuando quieras.',
-      presentada: describirClave_(datos.c, limpiarPerfil_(JSON.parse(fila.v[COL.perfil] || '{}')).regimen) + ', RUC ' + ruc + '.',
-      deshacer: describirClave_(datos.c, limpiarPerfil_(JSON.parse(fila.v[COL.perfil] || '{}')).regimen) + ' volverá a figurar como pendiente.'
-    }[p.accion];
+      confirmar: function () { return 'Recibirás en ' + fila.v[COL.correo] + ' un aviso un día hábil antes de cada vencimiento del RUC ' + ruc + ' que no hayas marcado como presentado.'; },
+      baja: function () { return 'Ya no te escribiremos a ' + fila.v[COL.correo] + ' sobre el RUC ' + ruc + '. Puedes volver a activarlos cuando quieras.'; },
+      presentada: function () { return describirClave_(datos.c, regimen) + ', RUC ' + ruc + '.'; },
+      deshacer: function () { return describirClave_(datos.c, regimen) + ' volverá a figurar como pendiente.'; }
+    }[p.accion]();
   }
   return datos;
 }
