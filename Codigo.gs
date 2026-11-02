@@ -191,6 +191,43 @@ function marcarPresentada(ruc, clave, presentada) {
   return obtenerMarcas(ruc);
 }
 
+// ---------- Carpetas en el Drive del proyecto ----------
+function carpeta_(nombre) {
+  var it = DriveApp.getFoldersByName(nombre);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(nombre);
+}
+
+// ---------- Respaldo semanal de la hoja (copia .xlsx en Drive) ----------
+var CARPETA_RESPALDOS = 'Semáforo Tributario - Respaldos';
+var RESPALDOS_A_GUARDAR = 12; // los más antiguos van a la papelera
+
+function respaldarDatos() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var resp = UrlFetchApp.fetch('https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx', {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true
+  });
+  if (resp.getResponseCode() !== 200) throw new Error('No se pudo exportar la hoja: ' + resp.getResponseCode());
+
+  var carpeta = carpeta_(CARPETA_RESPALDOS);
+  carpeta.createFile(resp.getBlob().setName('Respaldo semáforo ' + ahora_().replace(':', 'h') + '.xlsx'));
+  var archivos = [], it = carpeta.getFiles();
+  while (it.hasNext()) archivos.push(it.next());
+  archivos.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); })
+    .slice(RESPALDOS_A_GUARDAR).forEach(function (f) { f.setTrashed(true); });
+  Logger.log('Respaldo guardado en la carpeta "' + CARPETA_RESPALDOS + '" de tu Drive.');
+}
+
+// Ejecutar UNA vez desde el editor: programa el respaldo de cada lunes a las 7 a. m. y hace el primero ahora
+function instalarRespaldoSemanal() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'respaldarDatos') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('respaldarDatos').timeBased().everyWeeks(1).onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(7).inTimezone('America/Lima').create();
+  respaldarDatos();
+  Logger.log('Respaldo semanal programado: cada lunes a las 7 a. m.');
+}
+
 // ---------- Avisos por correo ----------
 // Hoja "Avisos": RUC | Correo | Perfil | Token | Estado | Registrado | Confirmado
 // Estado: pendiente (falta confirmar el correo), activo o baja
